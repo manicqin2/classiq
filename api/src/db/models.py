@@ -41,6 +41,7 @@ class Task(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     circuit: Mapped[str] = mapped_column(Text, nullable=False)
+    shots: Mapped[int] = mapped_column(Integer, nullable=False, default=1024)
     submitted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
