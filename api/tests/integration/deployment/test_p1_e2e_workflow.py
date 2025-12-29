@@ -4,15 +4,18 @@ These tests verify the complete task lifecycle from submission through
 worker processing to completion.
 """
 
-import pytest
 import asyncio
 
+import pytest
 
 BELL_STATE_CIRCUIT = """OPENQASM 3;
+include "stdgates.inc";
 qubit[2] q;
+bit[2] c;
 h q[0];
 cx q[0], q[1];
-measure q;"""
+c[0] = measure q[0];
+c[1] = measure q[1];"""
 
 
 @pytest.mark.p1
@@ -31,7 +34,11 @@ async def test_complete_task_workflow(api_client, db_client, cleanup_test_tasks,
     # 2. Verify task persisted to database
     task = await db_client.get_task(task_id)
     assert task is not None, f"Task {task_id} not found in database"
-    assert task["current_status"] == "pending", f"Expected 'pending', got '{task['current_status']}'"
+    # Task may already be processing if worker is very fast, accept pending or processing
+    assert task["current_status"] in [
+        "pending",
+        "processing",
+    ], f"Expected 'pending' or 'processing', got '{task['current_status']}'"
     assert task["circuit"] == BELL_STATE_CIRCUIT
 
     # 3. Wait for worker to process task (polling with timeout)
@@ -49,8 +56,9 @@ async def test_complete_task_workflow(api_client, db_client, cleanup_test_tasks,
         elapsed += poll_interval
 
     assert final_status is not None, f"Task did not complete within {max_wait}s"
-    assert final_status["status"] == "completed", \
-        f"Task failed with status: {final_status.get('status')}, message: {final_status.get('message')}"
+    assert (
+        final_status["status"] == "completed"
+    ), f"Task failed with status: {final_status.get('status')}, message: {final_status.get('message')}"
 
     # 4. Verify results stored correctly
     assert "result" in final_status, "No result in completed task"
@@ -69,5 +77,6 @@ async def test_complete_task_workflow(api_client, db_client, cleanup_test_tasks,
 
     # Verify chronological order
     for i in range(len(history) - 1):
-        assert history[i]["transitioned_at"] <= history[i+1]["transitioned_at"], \
-            "Status history not in chronological order"
+        assert (
+            history[i]["transitioned_at"] <= history[i + 1]["transitioned_at"]
+        ), "Status history not in chronological order"

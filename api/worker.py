@@ -13,18 +13,17 @@ import types
 import uuid
 
 import structlog
-
 from qiskit.qasm3 import QASM3ImporterError
 from qiskit_aer.aererror import AerError
 
 from db.models import TaskStatus
 from db.repository import TaskRepository
 from db.session import AsyncSessionLocal, close_db
-from messaging.consumer import QueueConsumer
-from messaging import cleanup_rabbitmq
-from execution.qiskit_validator import validate_qiskit
 from execution.qiskit_executor import QiskitExecutor
+from execution.qiskit_validator import validate_qiskit
 from execution.result_formatter import ResultFormatter
+from messaging import cleanup_rabbitmq
+from messaging.consumer import QueueConsumer
 
 logger = structlog.get_logger()
 
@@ -32,7 +31,7 @@ logger = structlog.get_logger()
 _shutdown_event: asyncio.Event | None = None
 
 
-async def process_task(message: dict[str, object]) -> None:
+async def process_task(message: dict[str, dict]) -> None:
     """
     Process a quantum circuit compilation task from the queue.
 
@@ -59,11 +58,7 @@ async def process_task(message: dict[str, object]) -> None:
     try:
         task_id = uuid.UUID(task_id_str)
     except ValueError as e:
-        logger.error(
-            "Invalid task_id format",
-            task_id=task_id_str,
-            error=str(e)
-        )
+        logger.error("Invalid task_id format", task_id=task_id_str, error=str(e))
         return
 
     logger.info("Processing task", task_id=str(task_id))
@@ -85,39 +80,33 @@ async def process_task(message: dict[str, object]) -> None:
             if task.current_status in (
                 TaskStatus.PROCESSING,
                 TaskStatus.COMPLETED,
-                TaskStatus.FAILED
+                TaskStatus.FAILED,
             ):
                 logger.info(
                     "Task already processed, skipping (idempotent behavior)",
                     task_id=str(task_id),
-                    current_status=task.current_status.value
+                    current_status=task.current_status.value,
                 )
                 return
 
             # T030: Task processing logic
             # Step 1: Transition from PENDING to PROCESSING
-            logger.info(
-                "Transitioning task to PROCESSING",
-                task_id=str(task_id)
-            )
+            logger.info("Transitioning task to PROCESSING", task_id=str(task_id))
             success = await repository.update_task_status(
                 task_id=task_id,
                 from_status=TaskStatus.PENDING,
                 to_status=TaskStatus.PROCESSING,
-                notes="Worker started processing"
+                notes="Worker started processing",
             )
 
             if not success:
                 logger.warning(
                     "Failed to transition task to PROCESSING (already changed by another worker)",
-                    task_id=str(task_id)
+                    task_id=str(task_id),
                 )
                 return
 
-            logger.info(
-                "Task transitioned to PROCESSING",
-                task_id=str(task_id)
-            )
+            logger.info("Task transitioned to PROCESSING", task_id=str(task_id))
 
             # Step 2: Execute quantum circuit with Qiskit
             # Get circuit and shots from task (T023)
@@ -135,36 +124,28 @@ async def process_task(message: dict[str, object]) -> None:
                     "Executing quantum circuit with Qiskit",
                     task_id=str(task_id),
                     circuit_length=len(circuit_string),
-                    shots=shots
+                    shots=shots,
                 )
 
                 # Run in thread pool to avoid blocking asyncio loop
                 # (Qiskit execution is CPU-bound synchronous operation)
                 loop = asyncio.get_event_loop()
                 counts = await loop.run_in_executor(
-                    None,
-                    executor.execute,
-                    circuit_string,
-                    shots  # Use configured shots parameter
+                    None, executor.execute, circuit_string, shots  # Use configured shots parameter
                 )
 
                 # Format and validate result
                 result = formatter.format_counts(counts)
 
                 logger.info(
-                    "Quantum circuit execution completed",
-                    task_id=str(task_id),
-                    result=result
+                    "Quantum circuit execution completed", task_id=str(task_id), result=result
                 )
 
             except QASM3ImporterError as e:
                 # Circuit parse errors
                 error_message = formatter.format_error(e, "Circuit parse error")
                 logger.error(
-                    "Circuit parse error",
-                    task_id=str(task_id),
-                    error=error_message,
-                    exc_info=True
+                    "Circuit parse error", task_id=str(task_id), error=error_message, exc_info=True
                 )
 
                 # Transition to FAILED
@@ -173,13 +154,12 @@ async def process_task(message: dict[str, object]) -> None:
                     from_status=TaskStatus.PROCESSING,
                     to_status=TaskStatus.FAILED,
                     error_message=error_message,
-                    notes=f"Circuit parse error: {str(e)}"
+                    notes=f"Circuit parse error: {str(e)}",
                 )
 
                 if success:
                     logger.info(
-                        "Task transitioned to FAILED due to parse error",
-                        task_id=str(task_id)
+                        "Task transitioned to FAILED due to parse error", task_id=str(task_id)
                     )
                 return
 
@@ -190,7 +170,7 @@ async def process_task(message: dict[str, object]) -> None:
                     "Circuit execution error",
                     task_id=str(task_id),
                     error=error_message,
-                    exc_info=True
+                    exc_info=True,
                 )
 
                 # Transition to FAILED
@@ -199,13 +179,12 @@ async def process_task(message: dict[str, object]) -> None:
                     from_status=TaskStatus.PROCESSING,
                     to_status=TaskStatus.FAILED,
                     error_message=error_message,
-                    notes=f"Circuit execution error: {str(e)}"
+                    notes=f"Circuit execution error: {str(e)}",
                 )
 
                 if success:
                     logger.info(
-                        "Task transitioned to FAILED due to execution error",
-                        task_id=str(task_id)
+                        "Task transitioned to FAILED due to execution error", task_id=str(task_id)
                     )
                 return
 
@@ -216,7 +195,7 @@ async def process_task(message: dict[str, object]) -> None:
                     "Unexpected error during circuit execution",
                     task_id=str(task_id),
                     error=error_message,
-                    exc_info=True
+                    exc_info=True,
                 )
 
                 # Transition to FAILED
@@ -225,41 +204,33 @@ async def process_task(message: dict[str, object]) -> None:
                     from_status=TaskStatus.PROCESSING,
                     to_status=TaskStatus.FAILED,
                     error_message=error_message,
-                    notes=f"Unexpected error: {str(e)}"
+                    notes=f"Unexpected error: {str(e)}",
                 )
 
                 if success:
                     logger.info(
-                        "Task transitioned to FAILED due to unexpected error",
-                        task_id=str(task_id)
+                        "Task transitioned to FAILED due to unexpected error", task_id=str(task_id)
                     )
                 return
 
             # Step 3: Transition from PROCESSING to COMPLETED
-            logger.info(
-                "Transitioning task to COMPLETED",
-                task_id=str(task_id)
-            )
+            logger.info("Transitioning task to COMPLETED", task_id=str(task_id))
             success = await repository.update_task_status(
                 task_id=task_id,
                 from_status=TaskStatus.PROCESSING,
                 to_status=TaskStatus.COMPLETED,
                 result=result,
-                notes="Task completed successfully"
+                notes="Task completed successfully",
             )
 
             if not success:
                 logger.warning(
                     "Failed to transition task to COMPLETED (status changed unexpectedly)",
-                    task_id=str(task_id)
+                    task_id=str(task_id),
                 )
                 return
 
-            logger.info(
-                "Task successfully completed",
-                task_id=str(task_id),
-                result=result
-            )
+            logger.info("Task successfully completed", task_id=str(task_id), result=result)
 
         except Exception as e:
             # T032: Error handling
@@ -269,7 +240,7 @@ async def process_task(message: dict[str, object]) -> None:
                 task_id=str(task_id),
                 error=str(e),
                 error_type=type(e).__name__,
-                exc_info=True
+                exc_info=True,
             )
 
             try:
@@ -280,7 +251,7 @@ async def process_task(message: dict[str, object]) -> None:
                     from_status=TaskStatus.PROCESSING,
                     to_status=TaskStatus.FAILED,
                     error_message=f"{type(e).__name__}: {str(e)}",
-                    notes=f"Task failed during processing: {type(e).__name__}: {str(e)}"
+                    notes=f"Task failed during processing: {type(e).__name__}: {str(e)}",
                 )
 
                 if not success:
@@ -290,26 +261,20 @@ async def process_task(message: dict[str, object]) -> None:
                         from_status=TaskStatus.PENDING,
                         to_status=TaskStatus.FAILED,
                         error_message=f"{type(e).__name__}: {str(e)}",
-                        notes=f"Task failed before processing: {type(e).__name__}: {str(e)}"
+                        notes=f"Task failed before processing: {type(e).__name__}: {str(e)}",
                     )
 
                 if success:
-                    logger.info(
-                        "Task transitioned to FAILED",
-                        task_id=str(task_id)
-                    )
+                    logger.info("Task transitioned to FAILED", task_id=str(task_id))
                 else:
-                    logger.error(
-                        "Failed to transition task to FAILED status",
-                        task_id=str(task_id)
-                    )
+                    logger.error("Failed to transition task to FAILED status", task_id=str(task_id))
 
             except Exception as update_error:
                 logger.error(
                     "Error updating task status to FAILED",
                     task_id=str(task_id),
                     error=str(update_error),
-                    exc_info=True
+                    exc_info=True,
                 )
 
             # Always acknowledge message (don't requeue on application errors)
@@ -375,7 +340,7 @@ async def main() -> None:
         # Wait for either consumption to complete or shutdown signal
         done, pending = await asyncio.wait(
             [consume_task, asyncio.create_task(_shutdown_event.wait())],
-            return_when=asyncio.FIRST_COMPLETED
+            return_when=asyncio.FIRST_COMPLETED,
         )
 
         # If shutdown was triggered, cancel the consumption task
@@ -395,11 +360,7 @@ async def main() -> None:
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt, stopping worker")
     except Exception as e:
-        logger.error(
-            "Fatal error in worker",
-            error=str(e),
-            exc_info=True
-        )
+        logger.error("Fatal error in worker", error=str(e), exc_info=True)
         raise
     finally:
         # Cleanup resources
@@ -410,22 +371,14 @@ async def main() -> None:
             await cleanup_rabbitmq()
             logger.info("RabbitMQ connections closed")
         except Exception as e:
-            logger.error(
-                "Error during RabbitMQ cleanup",
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Error during RabbitMQ cleanup", error=str(e), exc_info=True)
 
         try:
             # Close database connections
             await close_db()
             logger.info("Database connections closed")
         except Exception as e:
-            logger.error(
-                "Error during database cleanup",
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Error during database cleanup", error=str(e), exc_info=True)
 
         logger.info("Worker shutdown complete")
 

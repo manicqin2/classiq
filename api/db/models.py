@@ -4,15 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    Column,
-    Enum,
-    ForeignKey,
-    Index,
-    Integer,
-    Text,
-    func,
-)
+from sqlalchemy import Column, Enum, ForeignKey, Index, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -47,11 +39,9 @@ class Task(Base):
     current_status: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=TaskStatus.PENDING
+        default=TaskStatus.PENDING,
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 

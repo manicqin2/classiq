@@ -1,7 +1,8 @@
 """Task service for coordinating database and queue operations."""
 
-import structlog
 from uuid import UUID
+
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import TaskRepository
@@ -49,30 +50,19 @@ class TaskService:
             "task_created_in_database",
             task_id=str(task_id),
             circuit_length=len(circuit),
-            shots=shots
+            shots=shots,
         )
 
         try:
             # Step 2: Publish message to queue
             await self.publisher.publish_task_message(task_id, circuit)
-            logger.info(
-                "task_published_to_queue",
-                task_id=str(task_id)
-            )
+            logger.info("task_published_to_queue", task_id=str(task_id))
         except Exception as e:
             # Log the error but don't rollback the database transaction
             # The task persists in DB for at-least-once delivery
-            logger.error(
-                "queue_publish_failed",
-                task_id=str(task_id),
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("queue_publish_failed", task_id=str(task_id), error=str(e), exc_info=True)
             raise
 
         # Step 3: Return task
-        logger.info(
-            "task_submitted_successfully",
-            task_id=str(task_id)
-        )
+        logger.info("task_submitted_successfully", task_id=str(task_id))
         return task

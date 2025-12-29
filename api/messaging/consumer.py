@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 class QueueConsumer:
     """Consumer for processing messages from RabbitMQ queue."""
 
-    def __init__(self, callback: Callable[[dict[str, object]], Awaitable[None]]):
+    def __init__(self, callback: Callable[[dict[str, dict]], Awaitable[None]]):
         """
         Initialize the QueueConsumer.
 
@@ -38,10 +38,7 @@ class QueueConsumer:
             logger.info("Connected to RabbitMQ channel")
 
             # Declare the queue as durable
-            queue = await channel.declare_queue(
-                "quantum_tasks",
-                durable=True
-            )
+            queue = await channel.declare_queue("quantum_tasks", durable=True)
             logger.info("Declared quantum_tasks queue", queue_name=queue.name)
 
             # Set prefetch count for fair distribution
@@ -75,7 +72,7 @@ class QueueConsumer:
                                 correlation_id=correlation_id,
                                 timestamp=datetime.now(timezone.utc).isoformat(),
                                 message_id=message.message_id,
-                                queue="quantum_tasks"
+                                queue="quantum_tasks",
                             )
 
                             # Call callback function with decoded message
@@ -87,7 +84,7 @@ class QueueConsumer:
                                 task_id=task_id,
                                 correlation_id=correlation_id,
                                 timestamp=datetime.now(timezone.utc).isoformat(),
-                                message_id=message.message_id
+                                message_id=message.message_id,
                             )
                             # Message is automatically acknowledged when exiting the context manager
 
@@ -98,7 +95,7 @@ class QueueConsumer:
                                 timestamp=datetime.now(timezone.utc).isoformat(),
                                 error=str(e),
                                 message_body=message_body,
-                                message_id=message.message_id
+                                message_id=message.message_id,
                             )
                             # Message will be nacked when exception is raised in context manager
                             raise
@@ -120,15 +117,11 @@ class QueueConsumer:
                                 error=str(e),
                                 message_id=message.message_id,
                                 error_type=type(e).__name__,
-                                exc_info=True
+                                exc_info=True,
                             )
                             # Message will be nacked when exception is raised in context manager
                             raise
 
         except Exception as e:
-            logger.error(
-                "Fatal error in message consumer",
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Fatal error in message consumer", error=str(e), exc_info=True)
             raise

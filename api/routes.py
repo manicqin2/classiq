@@ -6,31 +6,30 @@ and persistence will be added in future features.
 """
 
 import uuid
+from datetime import datetime, timezone
 
+import aio_pika
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
-import aio_pika
 
-from datetime import datetime, timezone
-
+from middleware import get_correlation_id
 from models import (
-    TaskSubmitRequest,
-    TaskSubmitResponse,
+    HealthCheckResponse,
+    HealthStatus,
+    StatusHistoryEntry,
     TaskStatus,
     TaskStatusResponse,
-    StatusHistoryEntry,
-    HealthStatus,
-    HealthCheckResponse,
+    TaskSubmitRequest,
+    TaskSubmitResponse,
 )
-from middleware import get_correlation_id
-from utils import validate_uuid
 from db.repository import TaskRepository
 from db.session import get_db
-from services.task_service import TaskService
 from messaging import check_rabbitmq_health
+from services.task_service import TaskService
+from utils import validate_uuid
 
 logger = structlog.get_logger(__name__)
 
@@ -40,11 +39,9 @@ router = APIRouter()
 
 # ===== User Story 1: Task Submission =====
 
+
 @router.post("/tasks", response_model=TaskSubmitResponse, tags=["tasks"])
-async def submit_task(
-    request: TaskSubmitRequest,
-    db: AsyncSession = Depends(get_db)
-):
+async def submit_task(request: TaskSubmitRequest, db: AsyncSession = Depends(get_db)):
     """
     Submit a quantum circuit task for asynchronous execution.
 
@@ -90,7 +87,7 @@ async def submit_task(
             detail={
                 "message": "Service temporarily unavailable. Queue connection failed.",
                 "correlation_id": correlation_id,
-            }
+            },
         )
     except SQLAlchemyError as e:
         logger.error(
@@ -103,17 +100,15 @@ async def submit_task(
             detail={
                 "message": "Service temporarily unavailable. Database connection failed.",
                 "correlation_id": correlation_id,
-            }
+            },
         )
 
 
 # ===== User Story 2: Task Status Retrieval =====
 
+
 @router.get("/tasks/{task_id}", response_model=TaskStatusResponse, tags=["tasks"])
-async def get_task_status(
-    task_id: str,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     """
     Retrieve the status and results of a submitted task.
 
@@ -148,7 +143,7 @@ async def get_task_status(
                 detail={
                     "message": f"Task {task_id} not found.",
                     "correlation_id": correlation_id,
-                }
+                },
             )
 
         logger.info(
@@ -176,7 +171,7 @@ async def get_task_status(
             StatusHistoryEntry(
                 status=TaskStatus(entry.status.value.lower()),
                 transitioned_at=entry.transitioned_at,
-                notes=entry.notes
+                notes=entry.notes,
             )
             for entry in sorted(task.status_history, key=lambda e: e.transitioned_at)
         ]
@@ -206,11 +201,12 @@ async def get_task_status(
             detail={
                 "message": "Service temporarily unavailable. Database connection failed.",
                 "correlation_id": correlation_id,
-            }
+            },
         )
 
 
 # ===== User Story 3: Health Check =====
+
 
 @router.get("/health", response_model=HealthCheckResponse, tags=["health"])
 async def health_check(db: AsyncSession = Depends(get_db)):
@@ -245,7 +241,11 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     queue_status = "connected" if queue_connected else "disconnected"
 
     # Overall status is healthy only if BOTH db and queue are connected
-    overall_status = HealthStatus.HEALTHY if (database_status == "connected" and queue_status == "connected") else HealthStatus.UNHEALTHY
+    overall_status = (
+        HealthStatus.HEALTHY
+        if (database_status == "connected" and queue_status == "connected")
+        else HealthStatus.UNHEALTHY
+    )
 
     logger.info(
         "Health check completed",

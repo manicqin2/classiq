@@ -30,6 +30,7 @@ def _get_correlation_id() -> str:
     try:
         # Try to get correlation_id from structlog context
         from api.middleware import get_correlation_id
+
         correlation_id = get_correlation_id()
         if correlation_id:
             return correlation_id
@@ -93,7 +94,7 @@ class QueuePublisher:
             circuit_length=circuit_length,
             correlation_id=correlation_id,
             timestamp=timestamp,
-            queue="quantum_tasks"
+            queue="quantum_tasks",
         )
 
         try:
@@ -102,16 +103,10 @@ class QueuePublisher:
                 self._channel = await get_rabbitmq_channel()
 
             # Declare queue with durability to survive broker restarts
-            queue = await self._channel.declare_queue(
-                "quantum_tasks",
-                durable=True
-            )
+            queue = await self._channel.declare_queue("quantum_tasks", durable=True)
 
             # Create message payload
-            message_data = {
-                "task_id": str(task_id),
-                "circuit": circuit
-            }
+            message_data = {"task_id": str(task_id), "circuit": circuit}
             message_body = json.dumps(message_data).encode()
 
             # Create message with persistence and correlation ID
@@ -121,14 +116,11 @@ class QueuePublisher:
                 content_type="application/json",
                 message_id=str(uuid.uuid4()),
                 correlation_id=correlation_id,  # Add correlation ID for tracking
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
             )
 
             # Publish message to the queue
-            await self._channel.default_exchange.publish(
-                message,
-                routing_key=queue.name
-            )
+            await self._channel.default_exchange.publish(message, routing_key=queue.name)
 
             # Log successful publish
             logger.info(
@@ -138,7 +130,7 @@ class QueuePublisher:
                 correlation_id=correlation_id,
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 queue="quantum_tasks",
-                message_id=message.message_id
+                message_id=message.message_id,
             )
 
             return True
@@ -151,7 +143,7 @@ class QueuePublisher:
                 correlation_id=correlation_id,
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 error=str(e),
-                error_type="connection_error"
+                error_type="connection_error",
             )
             return False
 
@@ -163,7 +155,7 @@ class QueuePublisher:
                 correlation_id=correlation_id,
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 error=str(e),
-                error_type="channel_error"
+                error_type="channel_error",
             )
             return False
 
@@ -175,7 +167,7 @@ class QueuePublisher:
                 correlation_id=correlation_id,
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 error=str(e),
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
             return False
 

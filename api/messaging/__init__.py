@@ -12,7 +12,7 @@ import asyncio
 import logging
 
 import aio_pika
-from aio_pika import Connection, Channel
+from aio_pika import Channel, Connection
 from aio_pika.abc import AbstractRobustConnection
 
 from config import settings
@@ -87,9 +87,7 @@ async def get_rabbitmq_connection(
                 # Exponential backoff with max cap
                 retry_delay = min(retry_delay * backoff_factor, max_retry_delay)
             else:
-                logger.error(
-                    f"Failed to connect to RabbitMQ after {max_retries} attempts"
-                )
+                logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts")
                 raise ConnectionError(
                     f"Could not establish RabbitMQ connection after {max_retries} attempts: {str(last_exception)}"
                 ) from last_exception

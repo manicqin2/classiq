@@ -26,7 +26,7 @@ class DatabaseClient:
         async with self.pool.acquire() as conn:
             result = await conn.fetchval(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name=$1)",
-                table_name
+                table_name,
             )
             return result
 
@@ -40,10 +40,7 @@ class DatabaseClient:
             Dict with task data if found, None otherwise
         """
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM tasks WHERE task_id = $1::uuid",
-                task_id
-            )
+            row = await conn.fetchrow("SELECT * FROM tasks WHERE task_id = $1::uuid", task_id)
             return dict(row) if row else None
 
     async def get_status_history(self, task_id: str) -> list[dict[str, object]]:
@@ -58,7 +55,7 @@ class DatabaseClient:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM status_history WHERE task_id = $1::uuid ORDER BY transitioned_at",
-                task_id
+                task_id,
             )
             return [dict(row) for row in rows]
 

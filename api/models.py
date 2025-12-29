@@ -31,6 +31,7 @@ class ErrorResponse(BaseModel):
 
 # ===== User Story 1: Task Submission Models =====
 
+
 class TaskSubmitRequest(BaseModel):
     """Request model for submitting a quantum circuit task."""
 
@@ -39,15 +40,12 @@ class TaskSubmitRequest(BaseModel):
         1024,
         ge=1,
         le=100000,
-        description="Number of circuit executions (default: 1024, range: 1-100,000)"
+        description="Number of circuit executions (default: 1024, range: 1-100,000)",
     )
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "circuit": "OPENQASM 3; qubit q; h q; measure q;",
-                "shots": 1024
-            }
+            "example": {"circuit": "OPENQASM 3; qubit q; h q; measure q;", "shots": 1024}
         }
 
 
@@ -72,6 +70,7 @@ class TaskSubmitResponse(BaseModel):
 
 # ===== User Story 2: Task Status Models =====
 
+
 class TaskStatus(str, Enum):
     """Enum for task status values."""
 
@@ -85,7 +84,9 @@ class StatusHistoryEntry(BaseModel):
     """Model representing a single status history entry."""
 
     status: TaskStatus = Field(..., description="Task status at this point in time")
-    transitioned_at: datetime = Field(..., description="Timestamp when this status was recorded in ISO 8601 format")
+    transitioned_at: datetime = Field(
+        ..., description="Timestamp when this status was recorded in ISO 8601 format"
+    )
     notes: str | None = Field(None, description="Optional notes about the status transition")
 
     class Config:
@@ -93,7 +94,7 @@ class StatusHistoryEntry(BaseModel):
             "example": {
                 "status": "pending",
                 "transitioned_at": "2025-12-28T14:30:00.123Z",
-                "notes": "Task created"
+                "notes": "Task created",
             }
         }
 
@@ -126,7 +127,7 @@ class TaskStatusResponse(BaseModel):
                     {
                         "status": "pending",
                         "transitioned_at": "2025-12-28T14:30:00.123Z",
-                        "notes": "Task created"
+                        "notes": "Task created",
                     }
                 ],
                 "correlation_id": "xyz789-uvw456",
@@ -135,6 +136,7 @@ class TaskStatusResponse(BaseModel):
 
 
 # ===== User Story 3: Health Check Models =====
+
 
 class HealthStatus(str, Enum):
     """Enum for health status values."""

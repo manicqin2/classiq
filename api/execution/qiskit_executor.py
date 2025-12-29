@@ -45,10 +45,7 @@ class QiskitExecutor:
             QASM3ImporterError: If circuit syntax is invalid
         """
         circuit = qasm3.loads(circuit_string)
-        logger.debug(
-            f"Circuit parsed: {circuit.num_qubits} qubits, "
-            f"depth {circuit.depth()}"
-        )
+        logger.debug(f"Circuit parsed: {circuit.num_qubits} qubits, " f"depth {circuit.depth()}")
         return circuit
 
     def execute(self, circuit_string: str, shots: int = 1024) -> dict[str, int]:
@@ -96,28 +93,19 @@ class QiskitExecutor:
 
         except QASM3ImporterError as e:
             # Circuit parse errors: invalid syntax, undefined gates/qubits
-            logger.error(
-                f"Circuit parse error: {str(e)}",
-                exc_info=True
-            )
+            logger.error(f"Circuit parse error: {str(e)}", exc_info=True)
             logger.error(f"Full stack trace:\n{traceback.format_exc()}")
             raise
 
         except AerError as e:
             # Execution errors: memory allocation, invalid operations
-            logger.error(
-                f"Quantum circuit execution error: {str(e)}",
-                exc_info=True
-            )
+            logger.error(f"Quantum circuit execution error: {str(e)}", exc_info=True)
             logger.error(f"Full stack trace:\n{traceback.format_exc()}")
             raise
 
         except MemoryError as e:
             # Explicit memory error handling (circuit too large)
-            logger.error(
-                f"Memory allocation failed during execution: {str(e)}",
-                exc_info=True
-            )
+            logger.error(f"Memory allocation failed during execution: {str(e)}", exc_info=True)
             logger.error(f"Full stack trace:\n{traceback.format_exc()}")
             raise
 
@@ -125,7 +113,7 @@ class QiskitExecutor:
             # Catch-all for unexpected errors
             logger.error(
                 f"Unexpected error during circuit execution: {type(e).__name__}: {str(e)}",
-                exc_info=True
+                exc_info=True,
             )
             logger.error(f"Full stack trace:\n{traceback.format_exc()}")
             raise
