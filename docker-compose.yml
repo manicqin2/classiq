@@ -70,16 +70,81 @@ services:
     networks:
       - quantum-network
 
-  worker:
+  # ============================================
+  # Worker #1: Process tasks from queue
+  # ============================================
+  worker-1:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: quantum-worker-1
     command: python worker.py
     environment:
       - LOG_LEVEL=INFO
       - ENVIRONMENT=development
       - DATABASE_URL=postgresql+asyncpg://quantum_user:quantum_pass@postgres:5432/quantum_db
       - RABBITMQ_URL=amqp://quantum_user:quantum_pass@rabbitmq:5672/
+      - WORKER_ID=worker-1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os; exit(0 if os.path.exists('/proc/1') else 1)\""]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - quantum-network
+
+  # ============================================
+  # Worker #2: Process tasks from queue
+  # ============================================
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantum-worker-2
+    command: python worker.py
+    environment:
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://quantum_user:quantum_pass@postgres:5432/quantum_db
+      - RABBITMQ_URL=amqp://quantum_user:quantum_pass@rabbitmq:5672/
+      - WORKER_ID=worker-2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os; exit(0 if os.path.exists('/proc/1') else 1)\""]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - quantum-network
+
+  # ============================================
+  # Worker #3: Process tasks from queue
+  # ============================================
+  worker-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantum-worker-3
+    command: python worker.py
+    environment:
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://quantum_user:quantum_pass@postgres:5432/quantum_db
+      - RABBITMQ_URL=amqp://quantum_user:quantum_pass@rabbitmq:5672/
+      - WORKER_ID=worker-3
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import os; exit(0 if os.path.exists('/proc/1') else 1)\""]
