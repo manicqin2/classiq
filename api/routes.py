@@ -60,12 +60,12 @@ async def submit_task(request: TaskSubmitRequest, db: AsyncSession = Depends(get
     try:
         # Create task service and submit task (persists to DB and publishes to queue)
         service = TaskService(db)
-        task = await service.submit_task(request.circuit, shots=request.shots or 1024)
+        task = await service.submit_task(request.qc, shots=request.shots or 1024)
 
         logger.info(
             "Task submitted",
             task_id=str(task.task_id),
-            circuit_length=len(request.circuit),
+            circuit_length=len(request.qc),
             shots=request.shots or 1024,
         )
 
