@@ -7,15 +7,15 @@ Actual task execution and persistence will be added in subsequent features.
 
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
 
+import logging_config  # Initialize logging
 from config import settings
 from middleware import CorrelationIDMiddleware
-import logging_config  # Initialize logging
-from src.db.session import init_db, close_db
-from src.queue import get_rabbitmq_connection, cleanup_rabbitmq
+from db.session import close_db, init_db
+from messaging import cleanup_rabbitmq, get_rabbitmq_connection
 
 logger = structlog.get_logger(__name__)
 
@@ -40,9 +40,7 @@ async def lifespan(app: FastAPI):
         logger.info("RabbitMQ connection initialized")
     except Exception as e:
         logger.error(
-            "Failed to initialize RabbitMQ connection during startup",
-            error=str(e),
-            exc_info=True
+            "Failed to initialize RabbitMQ connection during startup", error=str(e), exc_info=True
         )
         # Continue startup even if RabbitMQ is unavailable
         # API will return 503 for task submissions
@@ -59,11 +57,7 @@ async def lifespan(app: FastAPI):
         await cleanup_rabbitmq()
         logger.info("RabbitMQ connections closed")
     except Exception as e:
-        logger.error(
-            "Error during RabbitMQ cleanup",
-            error=str(e),
-            exc_info=True
-        )
+        logger.error("Error during RabbitMQ cleanup", error=str(e), exc_info=True)
 
     # Close database connections
     await close_db()
@@ -97,8 +91,8 @@ app.add_middleware(CorrelationIDMiddleware)
 
 # Exception handlers
 from fastapi import Request, status
-from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 
