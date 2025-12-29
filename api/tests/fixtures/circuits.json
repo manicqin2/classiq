@@ -1,0 +1,118 @@
+{
+  "description": "Test circuit fixtures for quantum circuit execution validation",
+  "circuits": {
+    "hadamard_single_qubit": {
+      "description": "Single qubit Hadamard gate creating 50/50 superposition",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nh q;\nc = measure q;",
+      "expected_distribution": {
+        "0": "~50%",
+        "1": "~50%"
+      },
+      "expected_status": "completed"
+    },
+    "bell_state": {
+      "description": "Two-qubit Bell state (entanglement)",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit[2] q;\nbit[2] c;\nh q[0];\ncx q[0], q[1];\nc = measure q;",
+      "expected_distribution": {
+        "00": "~50%",
+        "11": "~50%"
+      },
+      "expected_status": "completed"
+    },
+    "deterministic_zero": {
+      "description": "Deterministic circuit always measuring |0⟩",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nc = measure q;",
+      "expected_distribution": {
+        "0": "100%"
+      },
+      "expected_status": "completed"
+    },
+    "x_gate": {
+      "description": "X gate flipping qubit to |1⟩",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nx q;\nc = measure q;",
+      "expected_distribution": {
+        "1": "100%"
+      },
+      "expected_status": "completed"
+    },
+    "three_qubit_ghz": {
+      "description": "Three-qubit GHZ state",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit[3] q;\nbit[3] c;\nh q[0];\ncx q[0], q[1];\ncx q[1], q[2];\nc = measure q;",
+      "expected_distribution": {
+        "000": "~50%",
+        "111": "~50%"
+      },
+      "expected_status": "completed"
+    },
+    "invalid_syntax": {
+      "description": "Invalid OpenQASM syntax (missing semicolon)",
+      "circuit": "OPENQASM 3.0;\ninvalid syntax here",
+      "expected_status": "failed",
+      "expected_error_category": "Circuit parse error"
+    },
+    "undefined_gate": {
+      "description": "Circuit using undefined gate",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nundefined_gate q;\nc = measure q;",
+      "expected_status": "failed",
+      "expected_error_category": "Circuit parse error"
+    },
+    "missing_stdgates": {
+      "description": "Using standard gate without include",
+      "circuit": "OPENQASM 3.0;\nqubit q;\nbit c;\nh q;\nc = measure q;",
+      "expected_status": "failed",
+      "expected_error_category": "Circuit parse error"
+    },
+    "missing_measurement_target": {
+      "description": "Measurement without saving result",
+      "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nh q;\nmeasure q;",
+      "expected_status": "failed",
+      "expected_error_category": "Circuit parse error"
+    }
+  },
+  "test_scenarios": [
+    {
+      "name": "Basic superposition",
+      "circuit_key": "hadamard_single_qubit",
+      "shots": 1024,
+      "tolerance": 0.05
+    },
+    {
+      "name": "Entanglement",
+      "circuit_key": "bell_state",
+      "shots": 1024,
+      "tolerance": 0.05
+    },
+    {
+      "name": "Deterministic outcome",
+      "circuit_key": "deterministic_zero",
+      "shots": 1024,
+      "tolerance": 0.0
+    },
+    {
+      "name": "Custom shot count (100)",
+      "circuit_key": "hadamard_single_qubit",
+      "shots": 100,
+      "tolerance": 0.1
+    },
+    {
+      "name": "Custom shot count (10000)",
+      "circuit_key": "hadamard_single_qubit",
+      "shots": 10000,
+      "tolerance": 0.02
+    },
+    {
+      "name": "Invalid syntax error handling",
+      "circuit_key": "invalid_syntax",
+      "shots": 1024
+    },
+    {
+      "name": "Undefined gate error handling",
+      "circuit_key": "undefined_gate",
+      "shots": 1024
+    }
+  ],
+  "usage_examples": {
+    "curl": "curl -X POST http://localhost:8001/tasks -H 'Content-Type: application/json' -d '{\"circuit\": \"<circuit_from_fixtures>\", \"shots\": 1024}'",
+    "python": "import requests\nresponse = requests.post('http://localhost:8001/tasks', json={'circuit': circuit, 'shots': 1024})"
+  }
+}
