@@ -1,7 +1,6 @@
 """HTTP client wrapper for API interaction in tests."""
 
 import httpx
-from typing import Dict, Any
 
 
 class APIClient:
@@ -11,7 +10,7 @@ class APIClient:
         self.base_url = base_url
         self.client = httpx.AsyncClient(base_url=base_url, timeout=timeout)
 
-    async def submit_task(self, circuit: str) -> Dict[str, Any]:
+    async def submit_task(self, circuit: str) -> dict[str, object]:
         """Submit quantum circuit task.
 
         Args:
@@ -27,7 +26,7 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
-    async def get_task_status(self, task_id: str) -> Dict[str, Any]:
+    async def get_task_status(self, task_id: str) -> dict[str, object]:
         """Get task status by ID.
 
         Args:
@@ -43,7 +42,7 @@ class APIClient:
         response.raise_for_status()
         return response.json()
 
-    async def check_health(self) -> Dict[str, Any]:
+    async def check_health(self) -> dict[str, object]:
         """Check API health endpoint.
 
         Returns:

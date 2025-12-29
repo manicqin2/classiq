@@ -10,10 +10,9 @@ Provides async connection management for RabbitMQ with:
 
 import asyncio
 import logging
-from typing import Optional
 
 import aio_pika
-from aio_pika import Connection, Channel
+from aio_pika import Channel, Connection
 from aio_pika.abc import AbstractRobustConnection
 
 from config import settings
@@ -21,8 +20,8 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 # Global connection and channel instances
-_connection: Optional[AbstractRobustConnection] = None
-_channel: Optional[Channel] = None
+_connection: AbstractRobustConnection | None = None
+_channel: Channel | None = None
 
 
 async def get_rabbitmq_connection(
@@ -88,9 +87,7 @@ async def get_rabbitmq_connection(
                 # Exponential backoff with max cap
                 retry_delay = min(retry_delay * backoff_factor, max_retry_delay)
             else:
-                logger.error(
-                    f"Failed to connect to RabbitMQ after {max_retries} attempts"
-                )
+                logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts")
                 raise ConnectionError(
                     f"Could not establish RabbitMQ connection after {max_retries} attempts: {str(last_exception)}"
                 ) from last_exception
@@ -228,7 +225,7 @@ async def cleanup_rabbitmq() -> None:
     logger.info("RabbitMQ cleanup completed")
 
 
-def _on_connection_closed(exception: Optional[Exception]) -> None:
+def _on_connection_closed(exception: Exception | None) -> None:
     """
     Callback for when connection is closed.
 

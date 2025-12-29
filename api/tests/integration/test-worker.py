@@ -32,13 +32,9 @@ import pytest
 
 # Test configuration from environment variables with defaults
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/quantum_circuits"
+    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/quantum_circuits"
 )
-RABBITMQ_URL = os.getenv(
-    "RABBITMQ_URL",
-    "amqp://guest:guest@localhost:5672/"
-)
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 
 # Test constants
 QUEUE_NAME = "quantum_tasks"
@@ -96,7 +92,7 @@ async def test_worker_processes_task_and_updates_status():
             """,
             task_id,
             TEST_CIRCUIT,
-            "PENDING"
+            "PENDING",
         )
 
         # Create initial status history entry
@@ -107,13 +103,12 @@ async def test_worker_processes_task_and_updates_status():
             """,
             task_id,
             "PENDING",
-            "Task created for integration test"
+            "Task created for integration test",
         )
 
         # Verify task was created
         task_record = await db_conn.fetchrow(
-            "SELECT task_id, current_status FROM tasks WHERE task_id = $1",
-            task_id
+            "SELECT task_id, current_status FROM tasks WHERE task_id = $1", task_id
         )
         assert task_record is not None, "Task was not created in database"
         assert task_record["current_status"] == "PENDING", "Task status should be PENDING"
@@ -123,23 +118,17 @@ async def test_worker_processes_task_and_updates_status():
         print("Declaring queue and publishing message")
         queue = await rabbitmq_channel.declare_queue(QUEUE_NAME, durable=True)
 
-        message_data = {
-            "task_id": str(task_id),
-            "circuit": TEST_CIRCUIT
-        }
+        message_data = {"task_id": str(task_id), "circuit": TEST_CIRCUIT}
         message_body = json.dumps(message_data).encode()
 
         message = aio_pika.Message(
             body=message_body,
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             content_type="application/json",
-            message_id=str(uuid.uuid4())
+            message_id=str(uuid.uuid4()),
         )
 
-        await rabbitmq_channel.default_exchange.publish(
-            message,
-            routing_key=QUEUE_NAME
-        )
+        await rabbitmq_channel.default_exchange.publish(message, routing_key=QUEUE_NAME)
         print(f"✓ Message published to queue: {QUEUE_NAME}")
 
         # Step 5: Wait up to 30 seconds for worker to process
@@ -154,7 +143,7 @@ async def test_worker_processes_task_and_updates_status():
             # Query current task status
             task_record = await db_conn.fetchrow(
                 "SELECT current_status, result, error_message FROM tasks WHERE task_id = $1",
-                task_id
+                task_id,
             )
 
             if task_record:
@@ -169,9 +158,7 @@ async def test_worker_processes_task_and_updates_status():
                     break
                 elif current_status == "FAILED":
                     error_msg = task_record["error_message"]
-                    pytest.fail(
-                        f"Task transitioned to FAILED status. Error: {error_msg}"
-                    )
+                    pytest.fail(f"Task transitioned to FAILED status. Error: {error_msg}")
 
             # Wait before next poll
             await asyncio.sleep(POLL_INTERVAL)
@@ -192,7 +179,7 @@ async def test_worker_processes_task_and_updates_status():
             WHERE task_id = $1
             ORDER BY transitioned_at ASC
             """,
-            task_id
+            task_id,
         )
 
         # Verify we have exactly 3 status history entries
@@ -206,8 +193,7 @@ async def test_worker_processes_task_and_updates_status():
         expected_statuses = ["PENDING", "PROCESSING", "COMPLETED"]
         actual_statuses = [record["status"] for record in status_history]
         assert actual_statuses == expected_statuses, (
-            f"Status transitions incorrect. Expected {expected_statuses}, "
-            f"got {actual_statuses}"
+            f"Status transitions incorrect. Expected {expected_statuses}, " f"got {actual_statuses}"
         )
         print(f"✓ Status transitions verified: {' → '.join(actual_statuses)}")
 
@@ -225,16 +211,15 @@ async def test_worker_processes_task_and_updates_status():
 
         # Verify notes are populated
         for i, record in enumerate(status_history):
-            assert record["notes"] is not None and len(record["notes"]) > 0, (
-                f"Status history entry {i} ({record['status']}) missing notes"
-            )
+            assert (
+                record["notes"] is not None and len(record["notes"]) > 0
+            ), f"Status history entry {i} ({record['status']}) missing notes"
         print("✓ All status history entries have notes")
 
         # Step 9: Verify result field is populated (non-null)
         print("Verifying task result...")
         final_task = await db_conn.fetchrow(
-            "SELECT result, completed_at FROM tasks WHERE task_id = $1",
-            task_id
+            "SELECT result, completed_at FROM tasks WHERE task_id = $1", task_id
         )
 
         assert final_task is not None, "Task not found in final verification"
@@ -273,15 +258,9 @@ async def test_worker_processes_task_and_updates_status():
         if db_conn and task_id:
             try:
                 # Delete status history first (foreign key constraint)
-                await db_conn.execute(
-                    "DELETE FROM status_history WHERE task_id = $1",
-                    task_id
-                )
+                await db_conn.execute("DELETE FROM status_history WHERE task_id = $1", task_id)
                 # Delete task
-                await db_conn.execute(
-                    "DELETE FROM tasks WHERE task_id = $1",
-                    task_id
-                )
+                await db_conn.execute("DELETE FROM tasks WHERE task_id = $1", task_id)
                 print(f"✓ Cleaned up test task: {task_id}")
             except Exception as e:
                 print(f"Warning: Failed to clean up test data: {e}")

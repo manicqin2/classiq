@@ -536,7 +536,7 @@ After successfully running tests locally:
 
 ## Additional Resources
 
-- **Full Implementation Plan**: [plan.md](./plan.md)
-- **Research Decisions**: [research.md](./research.md)
-- **Feature Specification**: [spec.md](./spec.md)
-- **Main API Documentation**: [../../README.md](../../README.md)
+- **Full Implementation Plan**: [plan.md](plan.md)
+- **Research Decisions**: [research.md](research.md)
+- **Feature Specification**: [spec.md](spec.md)
+- **Main API Documentation**: [../../README.md](../../api/README.md)

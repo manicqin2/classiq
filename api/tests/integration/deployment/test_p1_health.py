@@ -4,8 +4,9 @@ These tests verify that all system components (API, database, RabbitMQ)
 are running and responding correctly.
 """
 
-import pytest
 import time
+
+import pytest
 
 
 @pytest.mark.p1

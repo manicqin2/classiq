@@ -25,8 +25,9 @@ async def test_quantum_tasks_queue_is_durable(queue_client):
     """
     queue_info = await queue_client.get_queue_info("quantum_tasks")
 
-    assert queue_info["durable"] is True, \
-        "quantum_tasks queue is not durable (messages will be lost on restart)"
+    assert (
+        queue_info["durable"] is True
+    ), "quantum_tasks queue is not durable (messages will be lost on restart)"
 
 
 @pytest.mark.p2
@@ -39,8 +40,9 @@ async def test_quantum_tasks_queue_has_consumers(queue_client):
     """
     consumer_count = await queue_client.get_consumer_count("quantum_tasks")
 
-    assert consumer_count > 0, \
-        f"quantum_tasks queue has {consumer_count} consumers (expected at least 1 worker)"
+    assert (
+        consumer_count > 0
+    ), f"quantum_tasks queue has {consumer_count} consumers (expected at least 1 worker)"
 
 
 @pytest.mark.p2
@@ -55,8 +57,7 @@ async def test_queue_message_persistence(queue_client):
     queue_info = await queue_client.get_queue_info("quantum_tasks")
 
     # Check that queue is durable (prerequisite for message persistence)
-    assert queue_info["durable"] is True, \
-        "Queue must be durable for messages to be persistent"
+    assert queue_info["durable"] is True, "Queue must be durable for messages to be persistent"
 
     # If there are messages in queue, verify they're persistent
     # Note: Individual message persistence is enforced by publisher
@@ -75,8 +76,9 @@ async def test_queue_auto_delete_disabled(queue_client):
     """
     queue_info = await queue_client.get_queue_info("quantum_tasks")
 
-    assert queue_info["auto_delete"] is False, \
-        "quantum_tasks queue has auto_delete=true (will be deleted when consumers disconnect)"
+    assert (
+        queue_info["auto_delete"] is False
+    ), "quantum_tasks queue has auto_delete=true (will be deleted when consumers disconnect)"
 
 
 @pytest.mark.p2
@@ -90,12 +92,12 @@ async def test_queue_arguments(queue_client):
 
     # Verify queue exists and has expected fields
     assert "name" in queue_info, "Queue info missing name field"
-    assert queue_info["name"] == "quantum_tasks", \
-        f"Queue name is '{queue_info['name']}', expected 'quantum_tasks'"
+    assert (
+        queue_info["name"] == "quantum_tasks"
+    ), f"Queue name is '{queue_info['name']}', expected 'quantum_tasks'"
 
     # Verify vhost (should be default '/')
-    assert queue_info["vhost"] == "/", \
-        f"Queue vhost is '{queue_info['vhost']}', expected '/'"
+    assert queue_info["vhost"] == "/", f"Queue vhost is '{queue_info['vhost']}', expected '/'"
 
     # Queue arguments should be present (may be empty dict)
     assert "arguments" in queue_info, "Queue info missing arguments field"
@@ -113,9 +115,9 @@ async def test_rabbitmq_management_api_accessible(queue_client):
     # by checking the overview endpoint
     response = await queue_client.http_client.get("/api/overview")
 
-    assert response.status_code == 200, \
-        f"RabbitMQ Management API returned {response.status_code}, expected 200"
+    assert (
+        response.status_code == 200
+    ), f"RabbitMQ Management API returned {response.status_code}, expected 200"
 
     overview = response.json()
-    assert "rabbitmq_version" in overview, \
-        "Management API response missing rabbitmq_version"
+    assert "rabbitmq_version" in overview, "Management API response missing rabbitmq_version"

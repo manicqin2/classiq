@@ -1,7 +1,6 @@
 """RabbitMQ inspection helper for integration tests."""
 
 import httpx
-from typing import Dict, Any
 
 
 class QueueClient:
@@ -13,7 +12,7 @@ class QueueClient:
         self.mgmt_auth = httpx.BasicAuth(mgmt_user, mgmt_pass)
         self.http_client = httpx.AsyncClient(base_url=mgmt_url, auth=self.mgmt_auth)
 
-    async def get_queue_info(self, queue_name: str) -> Dict[str, Any]:
+    async def get_queue_info(self, queue_name: str) -> dict[str, object]:
         """Get queue metadata from RabbitMQ Management API.
 
         Args:
