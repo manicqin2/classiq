@@ -1,7 +1,6 @@
 """Format Qiskit execution results for database storage."""
 
 import logging
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class ResultFormatter:
     """
 
     @staticmethod
-    def format_counts(counts: Dict[str, int]) -> Dict[str, int]:
+    def format_counts(counts: dict[str, int]) -> dict[str, int]:
         """
         Format Qiskit counts dictionary for database storage.
 
@@ -49,7 +48,7 @@ class ResultFormatter:
         for key in counts.keys():
             if not isinstance(key, str):
                 raise ValueError(f"Count key must be string, got {type(key)}")
-            if not all(c in '01' for c in key):
+            if not all(c in "01" for c in key):
                 raise ValueError(f"Count key must be bitstring, got '{key}'")
 
         # Validate all values are non-negative integers
@@ -60,8 +59,7 @@ class ResultFormatter:
                 raise ValueError(f"Count value must be non-negative, got {value}")
 
         logger.debug(
-            f"Counts validated: {len(counts)} states, "
-            f"{sum(counts.values())} total measurements"
+            f"Counts validated: {len(counts)} states, " f"{sum(counts.values())} total measurements"
         )
 
         # Return unchanged (Qiskit format matches database format)

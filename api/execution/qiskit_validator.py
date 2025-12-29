@@ -1,7 +1,7 @@
 """Qiskit startup validation for quantum circuit execution workers."""
 
-import sys
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def validate_qiskit() -> bool:
     """
     try:
         # Import Qiskit core modules
-        from qiskit import qasm3, __version__
+        from qiskit import __version__, qasm3
         from qiskit_aer import AerSimulator
 
         # Test basic functionality with minimal circuit

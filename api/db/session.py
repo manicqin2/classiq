@@ -6,16 +6,12 @@ injection function for FastAPI routes.
 """
 
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import structlog
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from config import settings
@@ -88,6 +84,7 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 
     # Log at DEBUG level
     logger.debug("Database query completed", **log_data)
+
 
 # Create async session factory
 AsyncSessionLocal = async_sessionmaker(

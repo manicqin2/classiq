@@ -1,7 +1,6 @@
 """Database validation helper for integration tests."""
 
 import asyncpg
-from typing import Optional, List, Dict, Any
 
 
 class DatabaseClient:
@@ -9,7 +8,7 @@ class DatabaseClient:
 
     def __init__(self, connection_url: str):
         self.connection_url = connection_url
-        self.pool: Optional[asyncpg.Pool] = None
+        self.pool: asyncpg.Pool | None = None
 
     async def connect(self):
         """Establish database connection pool."""
@@ -27,11 +26,11 @@ class DatabaseClient:
         async with self.pool.acquire() as conn:
             result = await conn.fetchval(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name=$1)",
-                table_name
+                table_name,
             )
             return result
 
-    async def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_task(self, task_id: str) -> dict[str, object] | None:
         """Get task by ID from database.
 
         Args:
@@ -41,13 +40,10 @@ class DatabaseClient:
             Dict with task data if found, None otherwise
         """
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM tasks WHERE task_id = $1::uuid",
-                task_id
-            )
+            row = await conn.fetchrow("SELECT * FROM tasks WHERE task_id = $1::uuid", task_id)
             return dict(row) if row else None
 
-    async def get_status_history(self, task_id: str) -> List[Dict[str, Any]]:
+    async def get_status_history(self, task_id: str) -> list[dict[str, object]]:
         """Get status history for task.
 
         Args:
@@ -59,7 +55,7 @@ class DatabaseClient:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM status_history WHERE task_id = $1::uuid ORDER BY transitioned_at",
-                task_id
+                task_id,
             )
             return [dict(row) for row in rows]
 

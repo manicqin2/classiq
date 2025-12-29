@@ -3,9 +3,12 @@ FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
-# Install build dependencies
+# Install uv for faster package installation
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install build dependencies using uv (10-100x faster than pip)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Runtime stage
 FROM python:3.11-slim-bookworm
@@ -16,13 +19,11 @@ RUN useradd -m -u 1000 -s /bin/bash appuser
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY --chown=appuser:appuser . .
-
-# Set PATH for user-installed packages
-ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Switch to non-root user
 USER appuser

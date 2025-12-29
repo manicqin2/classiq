@@ -1,8 +1,8 @@
 """Shared pytest fixtures for deployment integration tests."""
 
 import os
+
 import pytest
-from typing import List
 
 
 @pytest.fixture(scope="session")
@@ -11,16 +11,14 @@ def test_config():
     return {
         "api_url": os.getenv("TEST_API_URL", "http://localhost:8001"),
         "db_url": os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://quantum_user:quantum_pass@localhost:5432/quantum_db"
+            "TEST_DATABASE_URL", "postgresql://quantum_user:quantum_pass@localhost:5432/quantum_db"
         ),
         "rabbitmq_url": os.getenv(
-            "TEST_RABBITMQ_URL",
-            "amqp://quantum_user:quantum_pass@localhost:5672/"
+            "TEST_RABBITMQ_URL", "amqp://quantum_user:quantum_pass@localhost:5672/"
         ),
         "rabbitmq_mgmt_url": os.getenv("TEST_RABBITMQ_MGMT_URL", "http://localhost:15672"),
-        "rabbitmq_user": os.getenv("TEST_RABBITMQ_USER", "guest"),
-        "rabbitmq_pass": os.getenv("TEST_RABBITMQ_PASS", "guest"),
+        "rabbitmq_user": os.getenv("TEST_RABBITMQ_MGMT_USER", "quantum_user"),
+        "rabbitmq_pass": os.getenv("TEST_RABBITMQ_MGMT_PASS", "quantum_pass"),
         "timeout": int(os.getenv("TEST_TIMEOUT", "30")),
         "poll_interval": float(os.getenv("TEST_POLL_INTERVAL", "0.5")),
     }
@@ -29,9 +27,9 @@ def test_config():
 @pytest.fixture
 async def cleanup_test_tasks(test_config):
     """Track and cleanup test tasks after each test."""
-    from .helpers.db_client import DatabaseClient
+    from tests.integration.deployment.helpers.db_client import DatabaseClient
 
-    test_task_ids: List[str] = []
+    test_task_ids: list[str] = []
 
     def register_task(task_id: str) -> str:
         """Register a task ID for cleanup."""
@@ -50,14 +48,10 @@ async def cleanup_test_tasks(test_config):
                 for task_id in test_task_ids:
                     # Delete status history first (foreign key constraint)
                     await conn.execute(
-                        "DELETE FROM status_history WHERE task_id = $1::uuid",
-                        task_id
+                        "DELETE FROM status_history WHERE task_id = $1::uuid", task_id
                     )
                     # Then delete task
-                    await conn.execute(
-                        "DELETE FROM tasks WHERE task_id = $1::uuid",
-                        task_id
-                    )
+                    await conn.execute("DELETE FROM tasks WHERE task_id = $1::uuid", task_id)
         finally:
             await db_client.close()
 
@@ -65,7 +59,7 @@ async def cleanup_test_tasks(test_config):
 @pytest.fixture
 async def api_client(test_config):
     """Provide API client instance."""
-    from .helpers.api_client import APIClient
+    from tests.integration.deployment.helpers.api_client import APIClient
 
     client = APIClient(test_config["api_url"])
     yield client
@@ -75,7 +69,7 @@ async def api_client(test_config):
 @pytest.fixture
 async def db_client(test_config):
     """Provide database client instance."""
-    from .helpers.db_client import DatabaseClient
+    from tests.integration.deployment.helpers.db_client import DatabaseClient
 
     client = DatabaseClient(test_config["db_url"])
     await client.connect()
@@ -86,13 +80,13 @@ async def db_client(test_config):
 @pytest.fixture
 async def queue_client(test_config):
     """Provide queue client instance."""
-    from .helpers.queue_client import QueueClient
+    from tests.integration.deployment.helpers.queue_client import QueueClient
 
     client = QueueClient(
         test_config["rabbitmq_url"],
         test_config["rabbitmq_mgmt_url"],
         test_config["rabbitmq_user"],
-        test_config["rabbitmq_pass"]
+        test_config["rabbitmq_pass"],
     )
     yield client
     await client.close()
