@@ -81,6 +81,12 @@ services:
       - DATABASE_URL=postgresql+asyncpg://quantum_user:quantum_pass@postgres:5432/quantum_db
       - RABBITMQ_URL=amqp://quantum_user:quantum_pass@rabbitmq:5672/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os; exit(0 if os.path.exists('/proc/1') else 1)\""]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy
