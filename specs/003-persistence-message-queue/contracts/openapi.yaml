@@ -1,0 +1,540 @@
+openapi: 3.1.0
+info:
+  title: Quantum Circuit Task Queue API
+  description: |
+    REST API for submitting quantum circuit execution tasks and retrieving results.
+
+    **Version 2.0.0 - Persistence and Message Queue Integration**
+
+    This version adds full persistence and asynchronous task processing:
+    - Tasks are permanently stored in PostgreSQL
+    - Task messages queued to RabbitMQ for worker processing
+    - Status history tracking for observability
+    - Survives server restarts with zero data loss
+
+    **Key Features:**
+    - Submit quantum circuits for async execution
+    - Query task status, results, and status history
+    - Health check with database and queue status
+    - At-least-once message delivery with idempotent workers
+
+    **Constitution Compliance:**
+    - Principle 1 (Zero Task Loss): PostgreSQL persistence + durable queue messages
+    - Principle 3 (Observable): Correlation IDs + status history tracking
+    - Principle 7 (Separation of Concerns): API layer delegates execution to workers
+    - Principle 8 (Production Patterns): RESTful design, ACID transactions
+  version: 2.0.0
+  contact:
+    name: Quantum Task Queue Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8001
+    description: Local development server (port changed from 8000 to avoid conflicts)
+  - url: http://api.example.com
+    description: Production server (example)
+
+tags:
+  - name: tasks
+    description: Task submission and status operations
+  - name: health
+    description: Service health and monitoring
+
+paths:
+  /tasks:
+    post:
+      tags:
+        - tasks
+      summary: Submit quantum circuit task
+      description: |
+        Submit a quantum circuit for asynchronous execution. The task is:
+        1. Persisted to PostgreSQL database
+        2. Published to RabbitMQ queue for worker processing
+        3. Returns immediately with task ID and submission timestamp
+
+        Workers pick up tasks from the queue and update status asynchronously.
+
+        **Error Scenarios:**
+        - Returns 503 if database or queue unavailable
+        - Returns 400 for validation errors
+      operationId: submitTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskSubmitRequest'
+            examples:
+              bell_state:
+                summary: Bell state circuit
+                value:
+                  circuit: "OPENQASM 3; qubit[2] q; h q[0]; cnot q[0], q[1]; measure q;"
+              hadamard:
+                summary: Single qubit Hadamard
+                value:
+                  circuit: "OPENQASM 3; qubit q; h q; measure q;"
+      responses:
+        '200':
+          description: Task submitted successfully (persisted and queued)
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskSubmitResponse'
+              examples:
+                success:
+                  value:
+                    task_id: "550e8400-e29b-41d4-a716-446655440000"
+                    submitted_at: "2025-12-28T14:30:00.123Z"
+                    message: "Task submitted successfully."
+                    correlation_id: "abc123-def456-789012"
+        '400':
+          description: Invalid request (validation error)
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_circuit:
+                  value:
+                    error: "Validation failed"
+                    details:
+                      circuit: "Field required"
+                    correlation_id: "abc123-def456"
+        '415':
+          description: Unsupported Media Type (non-JSON request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service unavailable (database or queue unreachable)
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                database_unavailable:
+                  value:
+                    error: "Service temporarily unavailable"
+                    details:
+                      reason: "Database connection failed"
+                    correlation_id: "abc123-def456"
+                queue_unavailable:
+                  value:
+                    error: "Service temporarily unavailable"
+                    details:
+                      reason: "Message queue connection failed"
+                    correlation_id: "abc123-def456"
+
+  /tasks/{task_id}:
+    get:
+      tags:
+        - tasks
+      summary: Get task status and history
+      description: |
+        Retrieve the current status, results, and status history of a previously submitted task.
+
+        **Response includes:**
+        - Current task status (pending/processing/completed/failed)
+        - Submission timestamp
+        - Completion timestamp (if completed or failed)
+        - Results (if completed)
+        - Error message (if failed)
+        - Status history: Full timeline of state transitions with timestamps
+
+        **Queried from PostgreSQL database** - persists across server restarts.
+      operationId: getTaskStatus
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: Unique task identifier (UUID v4)
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Task retrieved successfully
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusResponse'
+              examples:
+                pending:
+                  summary: Task pending
+                  value:
+                    task_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "pending"
+                    submitted_at: "2025-12-28T14:30:00.123Z"
+                    status_history:
+                      - status: "pending"
+                        transitioned_at: "2025-12-28T14:30:00.123Z"
+                        notes: "Task created"
+                    correlation_id: "xyz789-uvw456"
+                processing:
+                  summary: Task being processed
+                  value:
+                    task_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "processing"
+                    submitted_at: "2025-12-28T14:30:00.123Z"
+                    status_history:
+                      - status: "pending"
+                        transitioned_at: "2025-12-28T14:30:00.123Z"
+                        notes: "Task created"
+                      - status: "processing"
+                        transitioned_at: "2025-12-28T14:30:05.456Z"
+                        notes: "Worker started processing"
+                    correlation_id: "xyz789-uvw456"
+                completed:
+                  summary: Task completed
+                  value:
+                    task_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "completed"
+                    submitted_at: "2025-12-28T14:30:00.123Z"
+                    completed_at: "2025-12-28T14:30:12.789Z"
+                    result:
+                      "0": 512
+                      "1": 512
+                    status_history:
+                      - status: "pending"
+                        transitioned_at: "2025-12-28T14:30:00.123Z"
+                        notes: "Task created"
+                      - status: "processing"
+                        transitioned_at: "2025-12-28T14:30:05.456Z"
+                        notes: "Worker started processing"
+                      - status: "completed"
+                        transitioned_at: "2025-12-28T14:30:12.789Z"
+                        notes: "Task completed successfully"
+                    correlation_id: "xyz789-uvw456"
+                failed:
+                  summary: Task failed
+                  value:
+                    task_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "failed"
+                    submitted_at: "2025-12-28T14:30:00.123Z"
+                    completed_at: "2025-12-28T14:30:10.456Z"
+                    error_message: "Invalid circuit syntax: unexpected token 'xyz'"
+                    status_history:
+                      - status: "pending"
+                        transitioned_at: "2025-12-28T14:30:00.123Z"
+                        notes: "Task created"
+                      - status: "processing"
+                        transitioned_at: "2025-12-28T14:30:05.456Z"
+                        notes: "Worker started processing"
+                      - status: "failed"
+                        transitioned_at: "2025-12-28T14:30:10.456Z"
+                        notes: "Circuit execution failed"
+                    correlation_id: "xyz789-uvw456"
+        '400':
+          description: Invalid task ID format
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_uuid:
+                  value:
+                    error: "Invalid task ID format. Expected UUID v4."
+                    correlation_id: "xyz789-uvw456"
+        '404':
+          description: Task not found in database
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  value:
+                    error: "Task not found."
+                    correlation_id: "xyz789-uvw456"
+        '500':
+          description: Internal server error
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service unavailable (database unreachable)
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check with dependency status
+      description: |
+        Check service health and readiness. Used by monitoring systems and container
+        orchestration for liveness/readiness probes.
+
+        **Checks:**
+        - API server process running
+        - Database connectivity (simple query)
+        - Message queue connectivity (connection alive)
+
+        **Response Time:** < 100ms (typically < 50ms)
+
+        **Status Values:**
+        - `healthy`: All dependencies operational
+        - `degraded`: Some dependencies unavailable (API functional but cannot process tasks)
+        - `unavailable`: Critical failure (should not occur - server would not respond)
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy or degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+              examples:
+                healthy:
+                  summary: All systems operational
+                  value:
+                    status: "healthy"
+                    database_status: "connected"
+                    queue_status: "connected"
+                    timestamp: "2025-12-28T12:00:00Z"
+                degraded_database:
+                  summary: Database unavailable
+                  value:
+                    status: "degraded"
+                    database_status: "disconnected"
+                    queue_status: "connected"
+                    timestamp: "2025-12-28T12:00:00Z"
+                degraded_queue:
+                  summary: Queue unavailable
+                  value:
+                    status: "degraded"
+                    database_status: "connected"
+                    queue_status: "disconnected"
+                    timestamp: "2025-12-28T12:00:00Z"
+
+components:
+  schemas:
+    TaskSubmitRequest:
+      type: object
+      required:
+        - circuit
+      properties:
+        circuit:
+          type: string
+          minLength: 1
+          description: Quantum circuit definition (QASM3 or other text format)
+          example: "OPENQASM 3; qubit q; h q; measure q;"
+      example:
+        circuit: "OPENQASM 3; qubit q; h q; measure q;"
+
+    TaskSubmitResponse:
+      type: object
+      required:
+        - task_id
+        - submitted_at
+        - message
+        - correlation_id
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the submitted task
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        submitted_at:
+          type: string
+          format: date-time
+          description: UTC timestamp when task was submitted (ISO 8601)
+          example: "2025-12-28T14:30:00.123Z"
+        message:
+          type: string
+          description: Human-readable confirmation message
+          example: "Task submitted successfully."
+        correlation_id:
+          type: string
+          format: uuid
+          description: Request correlation ID for tracing
+          example: "abc123-def456-789012"
+
+    TaskStatusResponse:
+      type: object
+      required:
+        - task_id
+        - status
+        - submitted_at
+        - status_history
+        - correlation_id
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: Unique task identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+          description: Current task state
+          example: "pending"
+        submitted_at:
+          type: string
+          format: date-time
+          description: UTC timestamp when task was submitted
+          example: "2025-12-28T14:30:00.123Z"
+        completed_at:
+          type: string
+          format: date-time
+          description: UTC timestamp when task reached terminal state (present only for completed/failed)
+          example: "2025-12-28T14:30:12.789Z"
+        result:
+          type: object
+          description: Task execution results (present only for completed tasks)
+          example:
+            "0": 512
+            "1": 512
+        error_message:
+          type: string
+          description: Error details (present only for failed tasks)
+          example: "Invalid circuit syntax: unexpected token 'xyz'"
+        status_history:
+          type: array
+          description: Chronological list of status transitions
+          items:
+            $ref: '#/components/schemas/StatusHistoryEntry'
+        correlation_id:
+          type: string
+          format: uuid
+          description: Request correlation ID for tracing
+          example: "xyz789-uvw456"
+
+    StatusHistoryEntry:
+      type: object
+      required:
+        - status
+        - transitioned_at
+      properties:
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+          description: Status value at this transition
+          example: "processing"
+        transitioned_at:
+          type: string
+          format: date-time
+          description: UTC timestamp of transition
+          example: "2025-12-28T14:30:05.456Z"
+        notes:
+          type: string
+          description: Optional notes about the transition
+          example: "Worker started processing"
+
+    HealthCheckResponse:
+      type: object
+      required:
+        - status
+        - database_status
+        - queue_status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - degraded
+            - unavailable
+          description: Overall service health status
+          example: "healthy"
+        database_status:
+          type: string
+          enum:
+            - connected
+            - disconnected
+          description: Database connectivity status
+          example: "connected"
+        queue_status:
+          type: string
+          enum:
+            - connected
+            - disconnected
+          description: Message queue connectivity status
+          example: "connected"
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC timestamp of health check
+          example: "2025-12-28T12:00:00Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - correlation_id
+      properties:
+        error:
+          type: string
+          description: Brief error description
+          example: "Validation failed"
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context (field-specific validation errors, dependency status, etc.)
+          example:
+            circuit: "Field required"
+        correlation_id:
+          type: string
+          format: uuid
+          description: Request correlation ID for log tracing
+          example: "abc123-def456"
+
+  headers:
+    X-Correlation-ID:
+      description: Correlation ID for request tracing across services (API → Queue → Worker → Database)
+      schema:
+        type: string
+        format: uuid
+      example: "abc123-def456-789012"
+
+  securitySchemes:
+    # Future: API Key or JWT authentication
+    # For this version, no authentication required
+    {}

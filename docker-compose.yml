@@ -1,4 +1,46 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: quantum-postgres
+    environment:
+      - POSTGRES_USER=quantum_user
+      - POSTGRES_PASSWORD=quantum_pass
+      - POSTGRES_DB=quantum_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantum_user"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quantum-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: quantum-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=quantum_user
+      - RABBITMQ_DEFAULT_PASS=quantum_pass
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics check_running"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quantum-network
+
   api:
     build:
       context: .
@@ -11,6 +53,8 @@ services:
       - LOG_LEVEL=INFO
       - ENVIRONMENT=development
       - CORS_ORIGINS=*
+      - DATABASE_URL=postgresql+asyncpg://quantum_user:quantum_pass@postgres:5432/quantum_db
+      - RABBITMQ_URL=amqp://quantum_user:quantum_pass@rabbitmq:5672/
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -18,9 +62,37 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - quantum-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python worker.py
+    environment:
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://quantum_user:quantum_pass@postgres:5432/quantum_db
+      - RABBITMQ_URL=amqp://quantum_user:quantum_pass@rabbitmq:5672/
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - quantum-network
 
 networks:
   quantum-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
