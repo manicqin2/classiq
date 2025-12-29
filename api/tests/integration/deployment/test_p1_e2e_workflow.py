@@ -31,7 +31,9 @@ async def test_complete_task_workflow(api_client, db_client, cleanup_test_tasks,
     # 2. Verify task persisted to database
     task = await db_client.get_task(task_id)
     assert task is not None, f"Task {task_id} not found in database"
-    assert task["current_status"] == "pending", f"Expected 'pending', got '{task['current_status']}'"
+    # Task may already be processing if worker is very fast, accept pending or processing
+    assert task["current_status"] in ["pending", "processing"], \
+        f"Expected 'pending' or 'processing', got '{task['current_status']}'"
     assert task["circuit"] == BELL_STATE_CIRCUIT
 
     # 3. Wait for worker to process task (polling with timeout)

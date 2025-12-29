@@ -19,8 +19,8 @@ def test_config():
             "amqp://quantum_user:quantum_pass@localhost:5672/"
         ),
         "rabbitmq_mgmt_url": os.getenv("TEST_RABBITMQ_MGMT_URL", "http://localhost:15672"),
-        "rabbitmq_user": os.getenv("TEST_RABBITMQ_USER", "guest"),
-        "rabbitmq_pass": os.getenv("TEST_RABBITMQ_PASS", "guest"),
+        "rabbitmq_user": os.getenv("TEST_RABBITMQ_MGMT_USER", "guest"),
+        "rabbitmq_pass": os.getenv("TEST_RABBITMQ_MGMT_PASS", "guest"),
         "timeout": int(os.getenv("TEST_TIMEOUT", "30")),
         "poll_interval": float(os.getenv("TEST_POLL_INTERVAL", "0.5")),
     }
@@ -29,7 +29,7 @@ def test_config():
 @pytest.fixture
 async def cleanup_test_tasks(test_config):
     """Track and cleanup test tasks after each test."""
-    from .helpers.db_client import DatabaseClient
+    from tests.integration.deployment.helpers.db_client import DatabaseClient
 
     test_task_ids: List[str] = []
 
@@ -65,7 +65,7 @@ async def cleanup_test_tasks(test_config):
 @pytest.fixture
 async def api_client(test_config):
     """Provide API client instance."""
-    from .helpers.api_client import APIClient
+    from tests.integration.deployment.helpers.api_client import APIClient
 
     client = APIClient(test_config["api_url"])
     yield client
@@ -75,7 +75,7 @@ async def api_client(test_config):
 @pytest.fixture
 async def db_client(test_config):
     """Provide database client instance."""
-    from .helpers.db_client import DatabaseClient
+    from tests.integration.deployment.helpers.db_client import DatabaseClient
 
     client = DatabaseClient(test_config["db_url"])
     await client.connect()
@@ -86,7 +86,7 @@ async def db_client(test_config):
 @pytest.fixture
 async def queue_client(test_config):
     """Provide queue client instance."""
-    from .helpers.queue_client import QueueClient
+    from tests.integration.deployment.helpers.queue_client import QueueClient
 
     client = QueueClient(
         test_config["rabbitmq_url"],
