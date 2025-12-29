@@ -35,7 +35,7 @@ class ErrorResponse(BaseModel):
 class TaskSubmitRequest(BaseModel):
     """Request model for submitting a quantum circuit task."""
 
-    circuit: str = Field(..., min_length=1, description="Quantum circuit definition")
+    qc: str = Field(..., min_length=1, description="Quantum circuit in QASM3 format", alias="qc")
     shots: int | None = Field(
         1024,
         ge=1,
@@ -45,7 +45,7 @@ class TaskSubmitRequest(BaseModel):
 
     class Config:
         json_schema_extra = {
-            "example": {"circuit": "OPENQASM 3; qubit q; h q; measure q;", "shots": 1024}
+            "example": {"qc": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit[2] q;\nbit[2] c;\nh q[0];\ncx q[0], q[1];\nc[0] = measure q[0];\nc[1] = measure q[1];", "shots": 1024}
         }
 
 

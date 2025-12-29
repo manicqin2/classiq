@@ -22,7 +22,7 @@ class APIClient:
         Raises:
             httpx.HTTPStatusError: If API returns error status
         """
-        response = await self.client.post("/tasks", json={"circuit": circuit})
+        response = await self.client.post("/tasks", json={"qc": circuit})
         response.raise_for_status()
         return response.json()
 

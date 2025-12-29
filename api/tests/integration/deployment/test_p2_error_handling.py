@@ -23,7 +23,7 @@ def has_error_info(response_data):
 async def test_submit_task_with_empty_circuit(api_client):
     """Test that submitting a task with empty circuit returns 400 Bad Request."""
     try:
-        response = await api_client.client.post("/tasks", json={"circuit": ""})
+        response = await api_client.client.post("/tasks", json={"qc": ""})
         # Should get 400 or 422 (Unprocessable Entity)
         assert response.status_code in [
             400,
@@ -44,9 +44,9 @@ async def test_submit_task_with_empty_circuit(api_client):
 @pytest.mark.p2
 @pytest.mark.asyncio
 async def test_submit_task_missing_circuit_field(api_client):
-    """Test that submitting a task without circuit field returns 400/422."""
+    """Test that submitting a task without qc field returns 400/422."""
     try:
-        response = await api_client.client.post("/tasks", json={"not_circuit": "some value"})
+        response = await api_client.client.post("/tasks", json={"not_qc": "some value"})
         assert response.status_code in [
             400,
             422,
@@ -192,7 +192,7 @@ async def test_unsupported_http_methods(api_client):
     """Test that unsupported HTTP methods return 405 Method Not Allowed."""
     # Try PUT on /tasks (only POST should be supported)
     try:
-        response = await api_client.client.put("/tasks", json={"circuit": "test"})
+        response = await api_client.client.put("/tasks", json={"qc": "test"})
         assert (
             response.status_code == 405
         ), f"Expected 405 for PUT /tasks, got {response.status_code}"
