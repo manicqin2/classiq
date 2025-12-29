@@ -14,8 +14,8 @@ import structlog
 from config import settings
 from middleware import CorrelationIDMiddleware
 import logging_config  # Initialize logging
-from src.db.session import init_db, close_db
-from src.queue import get_rabbitmq_connection, cleanup_rabbitmq
+from db.session import init_db, close_db
+from messaging import get_rabbitmq_connection, cleanup_rabbitmq
 
 logger = structlog.get_logger(__name__)
 

@@ -10,7 +10,6 @@ Provides async connection management for RabbitMQ with:
 
 import asyncio
 import logging
-from typing import Optional
 
 import aio_pika
 from aio_pika import Connection, Channel
@@ -21,8 +20,8 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 # Global connection and channel instances
-_connection: Optional[AbstractRobustConnection] = None
-_channel: Optional[Channel] = None
+_connection: AbstractRobustConnection | None = None
+_channel: Channel | None = None
 
 
 async def get_rabbitmq_connection(
@@ -228,7 +227,7 @@ async def cleanup_rabbitmq() -> None:
     logger.info("RabbitMQ cleanup completed")
 
 
-def _on_connection_closed(exception: Optional[Exception]) -> None:
+def _on_connection_closed(exception: Exception | None) -> None:
     """
     Callback for when connection is closed.
 

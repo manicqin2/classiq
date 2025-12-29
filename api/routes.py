@@ -27,10 +27,10 @@ from models import (
 )
 from middleware import get_correlation_id
 from utils import validate_uuid
-from src.db.repository import TaskRepository
-from src.db.session import get_db
-from src.services.task_service import TaskService
-from src.queue import check_rabbitmq_health
+from db.repository import TaskRepository
+from db.session import get_db
+from services.task_service import TaskService
+from messaging import check_rabbitmq_health
 
 logger = structlog.get_logger(__name__)
 

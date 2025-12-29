@@ -9,30 +9,30 @@ idempotency checks and comprehensive error handling.
 import asyncio
 import signal
 import sys
+import types
 import uuid
-from typing import Any, Optional
 
 import structlog
 
 from qiskit.qasm3 import QASM3ImporterError
 from qiskit_aer.aererror import AerError
 
-from src.db.models import TaskStatus
-from src.db.repository import TaskRepository
-from src.db.session import AsyncSessionLocal, close_db
-from src.queue.consumer import QueueConsumer
-from src.queue import cleanup_rabbitmq
-from src.execution.qiskit_validator import validate_qiskit
-from src.execution.qiskit_executor import QiskitExecutor
-from src.execution.result_formatter import ResultFormatter
+from db.models import TaskStatus
+from db.repository import TaskRepository
+from db.session import AsyncSessionLocal, close_db
+from messaging.consumer import QueueConsumer
+from messaging import cleanup_rabbitmq
+from execution.qiskit_validator import validate_qiskit
+from execution.qiskit_executor import QiskitExecutor
+from execution.result_formatter import ResultFormatter
 
 logger = structlog.get_logger()
 
 # Global shutdown event for coordinating graceful shutdown
-_shutdown_event: Optional[asyncio.Event] = None
+_shutdown_event: asyncio.Event | None = None
 
 
-async def process_task(message: dict[str, Any]) -> None:
+async def process_task(message: dict[str, object]) -> None:
     """
     Process a quantum circuit compilation task from the queue.
 
@@ -316,7 +316,7 @@ async def process_task(message: dict[str, Any]) -> None:
             # The message will be acknowledged by the consumer's context manager
 
 
-def handle_shutdown_signal(signum: int, frame: Any) -> None:
+def handle_shutdown_signal(signum: int, frame: types.FrameType | None) -> None:
     """
     Signal handler for SIGINT and SIGTERM.
 

@@ -2,7 +2,6 @@
 
 import logging
 import traceback
-from typing import Dict
 
 from qiskit import qasm3
 from qiskit.qasm3 import QASM3ImporterError
@@ -52,7 +51,7 @@ class QiskitExecutor:
         )
         return circuit
 
-    def execute(self, circuit_string: str, shots: int = 1024) -> Dict[str, int]:
+    def execute(self, circuit_string: str, shots: int = 1024) -> dict[str, int]:
         """
         Execute a quantum circuit and return measurement results.
 

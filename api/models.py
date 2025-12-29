@@ -4,7 +4,6 @@ Pydantic models for request/response validation.
 All models use snake_case naming convention as per project standards.
 """
 
-from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 
@@ -15,7 +14,7 @@ class ErrorResponse(BaseModel):
     """Standard error response structure for all errors."""
 
     error: str = Field(..., description="Brief error description")
-    details: Optional[Dict[str, Any]] = Field(
+    details: dict[str, object] | None = Field(
         None, description="Field-specific validation errors (present for 400 errors)"
     )
     correlation_id: str = Field(..., description="Request correlation ID for log tracing")
@@ -36,7 +35,7 @@ class TaskSubmitRequest(BaseModel):
     """Request model for submitting a quantum circuit task."""
 
     circuit: str = Field(..., min_length=1, description="Quantum circuit definition")
-    shots: Optional[int] = Field(
+    shots: int | None = Field(
         1024,
         ge=1,
         le=100000,
@@ -87,7 +86,7 @@ class StatusHistoryEntry(BaseModel):
 
     status: TaskStatus = Field(..., description="Task status at this point in time")
     transitioned_at: datetime = Field(..., description="Timestamp when this status was recorded in ISO 8601 format")
-    notes: Optional[str] = Field(None, description="Optional notes about the status transition")
+    notes: str | None = Field(None, description="Optional notes about the status transition")
 
     class Config:
         json_schema_extra = {
@@ -105,13 +104,13 @@ class TaskStatusResponse(BaseModel):
     task_id: str = Field(..., description="Unique identifier for the task")
     status: TaskStatus = Field(..., description="Current task state")
     submitted_at: datetime = Field(..., description="Task submission timestamp in ISO 8601 format")
-    message: Optional[str] = Field(
+    message: str | None = Field(
         None, description="Human-readable status description (present for pending/failed states)"
     )
-    result: Optional[Dict[str, Any]] = Field(
+    result: dict[str, object] | None = Field(
         None, description="Task execution results (present only for completed tasks)"
     )
-    status_history: List[StatusHistoryEntry] = Field(
+    status_history: list[StatusHistoryEntry] = Field(
         ..., description="Chronological list of status transitions for this task"
     )
     correlation_id: str = Field(..., description="Request correlation ID for tracing")
@@ -151,10 +150,10 @@ class HealthCheckResponse(BaseModel):
 
     status: HealthStatus = Field(..., description="Service health status")
     timestamp: str = Field(..., description="UTC timestamp of health check in ISO 8601 format")
-    database_status: Optional[str] = Field(
+    database_status: str | None = Field(
         None, description="Database connectivity status (connected/disconnected)"
     )
-    queue_status: Optional[str] = Field(
+    queue_status: str | None = Field(
         None, description="Message queue connectivity status (connected/disconnected)"
     )
 

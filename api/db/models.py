@@ -3,7 +3,6 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import List, Optional
 
 from sqlalchemy import (
     Column,
@@ -50,14 +49,14 @@ class Task(Base):
         nullable=False,
         default=TaskStatus.PENDING
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
-    result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationship: one-to-many with StatusHistory
-    status_history: Mapped[List["StatusHistory"]] = relationship(
+    status_history: Mapped[list["StatusHistory"]] = relationship(
         "StatusHistory", back_populates="task", cascade="all, delete-orphan"
     )
 
@@ -82,7 +81,7 @@ class StatusHistory(Base):
     transitioned_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationship: many-to-one with Task
     task: Mapped["Task"] = relationship("Task", back_populates="status_history")

@@ -6,7 +6,7 @@ injection function for FastAPI routes.
 """
 
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import structlog
 from sqlalchemy import event

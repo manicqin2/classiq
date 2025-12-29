@@ -2,7 +2,6 @@
 
 import os
 import pytest
-from typing import List
 
 
 @pytest.fixture(scope="session")
@@ -19,8 +18,8 @@ def test_config():
             "amqp://quantum_user:quantum_pass@localhost:5672/"
         ),
         "rabbitmq_mgmt_url": os.getenv("TEST_RABBITMQ_MGMT_URL", "http://localhost:15672"),
-        "rabbitmq_user": os.getenv("TEST_RABBITMQ_USER", "guest"),
-        "rabbitmq_pass": os.getenv("TEST_RABBITMQ_PASS", "guest"),
+        "rabbitmq_user": os.getenv("TEST_RABBITMQ_MGMT_USER", "quantum_user"),
+        "rabbitmq_pass": os.getenv("TEST_RABBITMQ_MGMT_PASS", "quantum_pass"),
         "timeout": int(os.getenv("TEST_TIMEOUT", "30")),
         "poll_interval": float(os.getenv("TEST_POLL_INTERVAL", "0.5")),
     }
@@ -31,7 +30,7 @@ async def cleanup_test_tasks(test_config):
     """Track and cleanup test tasks after each test."""
     from .helpers.db_client import DatabaseClient
 
-    test_task_ids: List[str] = []
+    test_task_ids: list[str] = []
 
     def register_task(task_id: str) -> str:
         """Register a task ID for cleanup."""

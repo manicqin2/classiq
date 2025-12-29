@@ -7,13 +7,12 @@ Provides async task publishing capabilities for the quantum tasks queue.
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 from uuid import UUID
 
 import aio_pika
 import structlog
 
-from src.queue import get_rabbitmq_channel
+from messaging import get_rabbitmq_channel
 
 logger = structlog.get_logger(__name__)
 
@@ -49,7 +48,7 @@ class QueuePublisher:
     proper error handling, persistence, and logging.
     """
 
-    def __init__(self, channel: Optional[aio_pika.Channel] = None):
+    def __init__(self, channel: aio_pika.Channel | None = None):
         """
         Initialize the QueuePublisher.
 

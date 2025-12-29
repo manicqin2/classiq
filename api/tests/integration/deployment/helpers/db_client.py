@@ -1,7 +1,6 @@
 """Database validation helper for integration tests."""
 
 import asyncpg
-from typing import Optional, List, Dict, Any
 
 
 class DatabaseClient:
@@ -9,7 +8,7 @@ class DatabaseClient:
 
     def __init__(self, connection_url: str):
         self.connection_url = connection_url
-        self.pool: Optional[asyncpg.Pool] = None
+        self.pool: asyncpg.Pool | None = None
 
     async def connect(self):
         """Establish database connection pool."""
@@ -31,7 +30,7 @@ class DatabaseClient:
             )
             return result
 
-    async def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_task(self, task_id: str) -> dict[str, object] | None:
         """Get task by ID from database.
 
         Args:
@@ -47,7 +46,7 @@ class DatabaseClient:
             )
             return dict(row) if row else None
 
-    async def get_status_history(self, task_id: str) -> List[Dict[str, Any]]:
+    async def get_status_history(self, task_id: str) -> list[dict[str, object]]:
         """Get status history for task.
 
         Args:

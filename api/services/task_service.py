@@ -4,8 +4,8 @@ import structlog
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.repository import TaskRepository
-from src.queue.publisher import QueuePublisher
+from db.repository import TaskRepository
+from messaging.publisher import QueuePublisher
 
 logger = structlog.get_logger(__name__)
 

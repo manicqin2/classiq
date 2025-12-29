@@ -1,6 +1,6 @@
 """Database module for async SQLAlchemy session management."""
 
-from src.db.session import (
+from db.session import (
     AsyncSessionLocal,
     close_db,
     engine,

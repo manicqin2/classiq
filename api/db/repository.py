@@ -1,14 +1,13 @@
 """Repository layer for database operations."""
 
 import uuid
-from typing import Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.db.models import Task, TaskStatus, StatusHistory
+from db.models import Task, TaskStatus, StatusHistory
 
 
 class TaskRepository:
@@ -65,7 +64,7 @@ class TaskRepository:
             await self.session.rollback()
             raise SQLAlchemyError(f"Error creating task: {str(e)}") from e
 
-    async def get_task(self, task_id: uuid.UUID) -> Optional[Task]:
+    async def get_task(self, task_id: uuid.UUID) -> Task | None:
         """
         Retrieve a task by its ID.
 
@@ -73,7 +72,7 @@ class TaskRepository:
             task_id: UUID of the task to retrieve
 
         Returns:
-            Optional[Task]: The Task object if found, None otherwise
+            Task | None: The Task object if found, None otherwise
 
         Raises:
             SQLAlchemyError: If there's an error during database operations
@@ -89,7 +88,7 @@ class TaskRepository:
         except SQLAlchemyError as e:
             raise SQLAlchemyError(f"Error retrieving task {task_id}: {str(e)}") from e
 
-    async def get_task_with_history(self, task_id: uuid.UUID) -> Optional[Task]:
+    async def get_task_with_history(self, task_id: uuid.UUID) -> Task | None:
         """
         Retrieve a task by its ID with all status history eagerly loaded.
 
@@ -100,8 +99,8 @@ class TaskRepository:
             task_id: UUID of the task to retrieve
 
         Returns:
-            Optional[Task]: The Task object with populated status_history relationship
-                          if found, None otherwise
+            Task | None: The Task object with populated status_history relationship
+                       if found, None otherwise
 
         Raises:
             SQLAlchemyError: If there's an error during database operations
@@ -129,9 +128,9 @@ class TaskRepository:
         task_id: uuid.UUID,
         from_status: TaskStatus,
         to_status: TaskStatus,
-        result: Optional[dict] = None,
-        error_message: Optional[str] = None,
-        notes: Optional[str] = None
+        result: dict | None = None,
+        error_message: str | None = None,
+        notes: str | None = None
     ) -> bool:
         """
         Update task status with optimistic locking to prevent race conditions.
@@ -212,7 +211,7 @@ class TaskRepository:
         self,
         task_id: uuid.UUID,
         status: TaskStatus,
-        notes: Optional[str] = None
+        notes: str | None = None
     ) -> None:
         """
         Create a new StatusHistory record for a task.

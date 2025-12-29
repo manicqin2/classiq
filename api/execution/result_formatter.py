@@ -1,7 +1,6 @@
 """Format Qiskit execution results for database storage."""
 
 import logging
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class ResultFormatter:
     """
 
     @staticmethod
-    def format_counts(counts: Dict[str, int]) -> Dict[str, int]:
+    def format_counts(counts: dict[str, int]) -> dict[str, int]:
         """
         Format Qiskit counts dictionary for database storage.
 

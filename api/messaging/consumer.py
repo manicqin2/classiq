@@ -1,12 +1,12 @@
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
-from typing import Callable, Awaitable, Any
 
 import aio_pika
 import structlog
 
-from src.queue import get_rabbitmq_channel
+from messaging import get_rabbitmq_channel
 
 logger = structlog.get_logger(__name__)
 
@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 class QueueConsumer:
     """Consumer for processing messages from RabbitMQ queue."""
 
-    def __init__(self, callback: Callable[[dict[str, Any]], Awaitable[None]]):
+    def __init__(self, callback: Callable[[dict[str, object]], Awaitable[None]]):
         """
         Initialize the QueueConsumer.
 
