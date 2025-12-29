@@ -23,12 +23,13 @@ class TaskRepository:
         """
         self.session = session
 
-    async def create_task(self, circuit: str) -> Task:
+    async def create_task(self, circuit: str, shots: int = 1024) -> Task:
         """
-        Create a new task with the given circuit.
+        Create a new task with the given circuit and shots parameter.
 
         Args:
             circuit: The quantum circuit string to be compiled
+            shots: Number of circuit executions (default: 1024)
 
         Returns:
             Task: The newly created Task object with generated UUID
@@ -42,6 +43,7 @@ class TaskRepository:
             # status defaults to PENDING
             task = Task(
                 circuit=circuit,
+                shots=shots,
                 current_status=TaskStatus.PENDING
             )
 

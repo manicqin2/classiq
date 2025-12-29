@@ -38,8 +38,9 @@
 |-----------|-----------|---------|
 | **API Server** | FastAPI + Uvicorn | REST endpoints for task submission/status |
 | **Message Queue** | RabbitMQ (AMQP) | Durable, reliable task queue with guarantees |
-| **Workers** | Python + Pika | Consume messages, execute Qiskit circuits |
-| **Database** | PostgreSQL | Task state persistence (source of truth) |
+| **Workers** | Python + aio-pika | Consume messages, execute Qiskit circuits |
+| **Quantum Simulator** | Qiskit 1.4+ + Aer | OpenQASM 3 circuit execution and simulation |
+| **Database** | PostgreSQL + SQLAlchemy | Task state persistence (source of truth) |
 | **Orchestration** | Docker Compose | Container coordination |
 
 ---
@@ -374,19 +375,70 @@ async def submit_task(request: SubmitTaskRequest):
 
 **Each worker runs independently:**
 
-1. Connect to RabbitMQ
-2. Declare queue and exchange (idempotent)
-3. Start consuming messages from `task_queue`
-4. For each message:
-   - Extract task_id and circuit
-   - Fetch circuit from PostgreSQL (optional, included in message)
-   - Deserialize QASM3 string
-   - Execute with Qiskit AerSimulator (1024 shots)
-   - Update PostgreSQL: status='completed', result=<counts>
+1. **Startup**: Validate Qiskit availability (exits if validation fails)
+2. Connect to RabbitMQ
+3. Declare queue and exchange (idempotent)
+4. Start consuming messages from `task_queue`
+5. For each message:
+   - Extract task_id from message
+   - Fetch task from PostgreSQL (including circuit and shots parameter)
+   - Transition status: PENDING → PROCESSING (with optimistic locking)
+   - Parse OpenQASM 3 circuit string
+   - Execute with Qiskit AerSimulator (configurable shots: 1-100,000)
+   - Update PostgreSQL: status=COMPLETED, result=<counts>
+   - Create status history entry
    - Acknowledge message to RabbitMQ
-5. If worker crashes before ACK:
+6. If worker crashes before ACK:
    - RabbitMQ redelivers message to another worker
    - No task is lost
+
+**Qiskit Execution Layer:**
+
+Workers use a modular execution architecture with three components:
+
+1. **QiskitValidator** (`src/execution/qiskit_validator.py`)
+   - Validates Qiskit availability on worker startup
+   - Tests import of `qiskit`, `qiskit_aer`, `qiskit_qasm3_import`
+   - Executes minimal test circuit to verify functionality
+   - Logs Qiskit version (currently 1.4.5)
+   - Exits with code 1 if validation fails (prevents unhealthy workers from consuming)
+
+2. **QiskitExecutor** (`src/execution/qiskit_executor.py`)
+   - Parses OpenQASM 3 circuit strings using `qiskit.qasm3.loads()`
+   - Executes circuits on AerSimulator backend
+   - Supports configurable shot count (1-100,000)
+   - AerSimulator automatically selects optimal simulation method based on circuit size
+   - Returns measurement counts as sparse dictionary (e.g., `{"00": 512, "11": 512}`)
+
+3. **ResultFormatter** (`src/execution/result_formatter.py`)
+   - Validates Qiskit results before database storage
+   - Ensures counts are valid bitstring dictionaries
+   - Formats error messages with categorization (parse/execution/unexpected)
+   - Provides structured error reporting for failed tasks
+
+**Error Handling:**
+
+Workers implement three-tier error handling:
+
+```python
+try:
+    counts = executor.execute(circuit_string, shots)
+    result = formatter.format_counts(counts)
+except QASM3ImporterError as e:
+    # Circuit parse errors (invalid syntax, undefined gates)
+    error_message = formatter.format_error(e, "Circuit parse error")
+    status = FAILED
+except (AerError, MemoryError) as e:
+    # Execution errors (simulation failures, out of memory)
+    error_message = formatter.format_error(e, "Execution error")
+    status = FAILED
+except Exception as e:
+    # Unexpected errors
+    error_message = formatter.format_error(e, "Unexpected error")
+    status = FAILED
+```
+
+All errors are logged with full stack traces and stored in the database `error_message` field.
 
 **Implementation:**
 ```python

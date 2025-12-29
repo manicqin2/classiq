@@ -22,7 +22,7 @@ class TaskService:
         self.repository = TaskRepository(db)
         self.publisher = QueuePublisher()
 
-    async def submit_task(self, circuit: str) -> "Task":
+    async def submit_task(self, circuit: str, shots: int = 1024) -> "Task":
         """Submit a task by creating database record and publishing to queue.
 
         This method coordinates two operations:
@@ -34,6 +34,7 @@ class TaskService:
 
         Args:
             circuit: Circuit code string to be processed
+            shots: Number of circuit executions (default: 1024)
 
         Returns:
             Task: The created Task object with task_id and submitted_at
@@ -42,12 +43,13 @@ class TaskService:
             Exception: If database operation fails or queue publishing fails
         """
         # Step 1: Create task in database
-        task = await self.repository.create_task(circuit)
+        task = await self.repository.create_task(circuit, shots=shots)
         task_id = task.task_id
         logger.info(
             "task_created_in_database",
             task_id=str(task_id),
-            circuit_length=len(circuit)
+            circuit_length=len(circuit),
+            shots=shots
         )
 
         try:

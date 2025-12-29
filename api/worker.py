@@ -8,16 +8,23 @@ idempotency checks and comprehensive error handling.
 
 import asyncio
 import signal
+import sys
 import uuid
 from typing import Any, Optional
 
 import structlog
+
+from qiskit.qasm3 import QASM3ImporterError
+from qiskit_aer.aererror import AerError
 
 from src.db.models import TaskStatus
 from src.db.repository import TaskRepository
 from src.db.session import AsyncSessionLocal, close_db
 from src.queue.consumer import QueueConsumer
 from src.queue import cleanup_rabbitmq
+from src.execution.qiskit_validator import validate_qiskit
+from src.execution.qiskit_executor import QiskitExecutor
+from src.execution.result_formatter import ResultFormatter
 
 logger = structlog.get_logger()
 
@@ -112,26 +119,121 @@ async def process_task(message: dict[str, Any]) -> None:
                 task_id=str(task_id)
             )
 
-            # Step 2: Mock quantum circuit execution
-            # Simulate circuit compilation and execution (2-3 second delay)
-            logger.info(
-                "Simulating quantum circuit execution",
-                task_id=str(task_id)
-            )
-            await asyncio.sleep(2.5)  # Simulated processing time
+            # Step 2: Execute quantum circuit with Qiskit
+            # Get circuit and shots from task (T023)
+            circuit_string = task.circuit
+            shots = task.shots if task.shots else 1024  # Default to 1024 if not specified
 
-            # Mock result: quantum circuit execution output
-            # Format: {"0": 512, "1": 512} (measurement counts for 2-qubit circuit)
-            mock_result = {
-                "0": 512,
-                "1": 512
-            }
+            # Initialize executor and formatter
+            executor = QiskitExecutor()
+            formatter = ResultFormatter()
 
-            logger.info(
-                "Quantum circuit execution completed",
-                task_id=str(task_id),
-                result=mock_result
-            )
+            # Execute circuit with error handling
+            try:
+                # Execute circuit with configurable shots (T024, T025, T027)
+                logger.info(
+                    "Executing quantum circuit with Qiskit",
+                    task_id=str(task_id),
+                    circuit_length=len(circuit_string),
+                    shots=shots
+                )
+
+                # Run in thread pool to avoid blocking asyncio loop
+                # (Qiskit execution is CPU-bound synchronous operation)
+                loop = asyncio.get_event_loop()
+                counts = await loop.run_in_executor(
+                    None,
+                    executor.execute,
+                    circuit_string,
+                    shots  # Use configured shots parameter
+                )
+
+                # Format and validate result
+                result = formatter.format_counts(counts)
+
+                logger.info(
+                    "Quantum circuit execution completed",
+                    task_id=str(task_id),
+                    result=result
+                )
+
+            except QASM3ImporterError as e:
+                # Circuit parse errors
+                error_message = formatter.format_error(e, "Circuit parse error")
+                logger.error(
+                    "Circuit parse error",
+                    task_id=str(task_id),
+                    error=error_message,
+                    exc_info=True
+                )
+
+                # Transition to FAILED
+                success = await repository.update_task_status(
+                    task_id=task_id,
+                    from_status=TaskStatus.PROCESSING,
+                    to_status=TaskStatus.FAILED,
+                    error_message=error_message,
+                    notes=f"Circuit parse error: {str(e)}"
+                )
+
+                if success:
+                    logger.info(
+                        "Task transitioned to FAILED due to parse error",
+                        task_id=str(task_id)
+                    )
+                return
+
+            except (AerError, MemoryError) as e:
+                # Execution errors: AerError or MemoryError
+                error_message = formatter.format_error(e, "Execution error")
+                logger.error(
+                    "Circuit execution error",
+                    task_id=str(task_id),
+                    error=error_message,
+                    exc_info=True
+                )
+
+                # Transition to FAILED
+                success = await repository.update_task_status(
+                    task_id=task_id,
+                    from_status=TaskStatus.PROCESSING,
+                    to_status=TaskStatus.FAILED,
+                    error_message=error_message,
+                    notes=f"Circuit execution error: {str(e)}"
+                )
+
+                if success:
+                    logger.info(
+                        "Task transitioned to FAILED due to execution error",
+                        task_id=str(task_id)
+                    )
+                return
+
+            except Exception as e:
+                # Unexpected errors during circuit execution
+                error_message = formatter.format_error(e, "Unexpected error")
+                logger.error(
+                    "Unexpected error during circuit execution",
+                    task_id=str(task_id),
+                    error=error_message,
+                    exc_info=True
+                )
+
+                # Transition to FAILED
+                success = await repository.update_task_status(
+                    task_id=task_id,
+                    from_status=TaskStatus.PROCESSING,
+                    to_status=TaskStatus.FAILED,
+                    error_message=error_message,
+                    notes=f"Unexpected error: {str(e)}"
+                )
+
+                if success:
+                    logger.info(
+                        "Task transitioned to FAILED due to unexpected error",
+                        task_id=str(task_id)
+                    )
+                return
 
             # Step 3: Transition from PROCESSING to COMPLETED
             logger.info(
@@ -142,7 +244,7 @@ async def process_task(message: dict[str, Any]) -> None:
                 task_id=task_id,
                 from_status=TaskStatus.PROCESSING,
                 to_status=TaskStatus.COMPLETED,
-                result=mock_result,
+                result=result,
                 notes="Task completed successfully"
             )
 
@@ -156,7 +258,7 @@ async def process_task(message: dict[str, Any]) -> None:
             logger.info(
                 "Task successfully completed",
                 task_id=str(task_id),
-                result=mock_result
+                result=result
             )
 
         except Exception as e:
@@ -255,6 +357,12 @@ async def main() -> None:
     signal.signal(signal.SIGTERM, handle_shutdown_signal)
 
     logger.info("Starting quantum task worker")
+
+    # Validate Qiskit availability before consuming messages
+    if not validate_qiskit():
+        logger.error("Qiskit validation failed, worker cannot start")
+        sys.exit(1)
+
     logger.info("Graceful shutdown enabled (SIGINT, SIGTERM)")
 
     # Create consumer with process_task callback

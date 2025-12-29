@@ -36,10 +36,19 @@ class TaskSubmitRequest(BaseModel):
     """Request model for submitting a quantum circuit task."""
 
     circuit: str = Field(..., min_length=1, description="Quantum circuit definition")
+    shots: Optional[int] = Field(
+        1024,
+        ge=1,
+        le=100000,
+        description="Number of circuit executions (default: 1024, range: 1-100,000)"
+    )
 
     class Config:
         json_schema_extra = {
-            "example": {"circuit": "OPENQASM 3; qubit q; h q; measure q;"}
+            "example": {
+                "circuit": "OPENQASM 3; qubit q; h q; measure q;",
+                "shots": 1024
+            }
         }
 
 
