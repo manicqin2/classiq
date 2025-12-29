@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -127,9 +127,15 @@ class TaskRepository:
         """
         Update task status with optimistic locking to prevent race conditions.
 
-        This method uses row-level locking and status verification to ensure that
-        only one worker can transition a task from a specific status. If another
-        worker has already changed the status, this method returns False.
+        This method uses an atomic UPDATE with status verification in the WHERE clause
+        to ensure that only one worker can transition a task from a specific status.
+        If another worker has already changed the status, the UPDATE affects 0 rows
+        and this method returns False.
+
+        This approach is more efficient than SELECT FOR UPDATE because:
+        - Single database round-trip instead of two (SELECT + UPDATE)
+        - No pessimistic lock held, allowing higher concurrency
+        - Workers fail fast if status already changed
 
         Args:
             task_id: UUID of the task to update
@@ -140,43 +146,41 @@ class TaskRepository:
             notes: Optional notes for status history entry
 
         Returns:
-            bool: True if update succeeded, False if status already changed
+            bool: True if update succeeded, False if status already changed or task not found
 
         Raises:
             SQLAlchemyError: If there's an error during database operations
         """
         try:
-            # Query task with row-level locking (SELECT FOR UPDATE)
-            stmt = select(Task).where(Task.task_id == task_id).with_for_update()
-            result_set = await self.session.execute(stmt)
-            task = result_set.scalar_one_or_none()
-
-            # Check if task exists
-            if task is None:
-                return False
-
-            # Check if current status matches expected from_status (optimistic locking)
-            if task.current_status != from_status:
-                # Status already changed by another worker
-                return False
-
-            # Update status
-            task.current_status = to_status
+            # Build UPDATE statement with status check in WHERE clause (atomic operation)
+            stmt = (
+                update(Task)
+                .where(Task.task_id == task_id)
+                .where(Task.current_status == from_status)  # Optimistic locking check
+                .values(current_status=to_status)
+            )
 
             # Set completed_at for terminal states
             if to_status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
-                task.completed_at = func.now()
+                stmt = stmt.values(completed_at=func.now())
 
             # Set result if provided (typically for COMPLETED status)
             if result is not None:
-                task.result = result
+                stmt = stmt.values(result=result)
 
             # Set error_message if provided (typically for FAILED status)
             if error_message is not None:
-                task.error_message = error_message
+                stmt = stmt.values(error_message=error_message)
 
-            # Commit the transaction
+            # Execute atomic update
+            result_set = await self.session.execute(stmt)
             await self.session.commit()
+
+            # Check if any row was updated
+            rows_affected = result_set.rowcount
+            if rows_affected == 0:
+                # Either task doesn't exist OR status already changed by another worker
+                return False
 
             # Create status history entry after successful update
             # Use provided notes or generate default message
