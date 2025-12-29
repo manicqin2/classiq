@@ -14,6 +14,8 @@ import structlog
 from config import settings
 from middleware import CorrelationIDMiddleware
 import logging_config  # Initialize logging
+from src.db.session import init_db, close_db
+from src.queue import get_rabbitmq_connection, cleanup_rabbitmq
 
 logger = structlog.get_logger(__name__)
 
@@ -27,11 +29,48 @@ async def lifespan(app: FastAPI):
         environment=settings.environment,
         log_level=settings.log_level,
     )
+
+    # Initialize database connection pool
+    await init_db()
+    logger.info("Database connection pool initialized")
+
+    # Initialize RabbitMQ connection
+    try:
+        await get_rabbitmq_connection()
+        logger.info("RabbitMQ connection initialized")
+    except Exception as e:
+        logger.error(
+            "Failed to initialize RabbitMQ connection during startup",
+            error=str(e),
+            exc_info=True
+        )
+        # Continue startup even if RabbitMQ is unavailable
+        # API will return 503 for task submissions
+
+    logger.info("Application startup complete")
+
     yield
+
     # Shutdown - gracefully drain in-flight requests
-    logger.info("Application shutting down gracefully")
+    logger.info("Application shutdown initiated")
+
+    # Close RabbitMQ connections
+    try:
+        await cleanup_rabbitmq()
+        logger.info("RabbitMQ connections closed")
+    except Exception as e:
+        logger.error(
+            "Error during RabbitMQ cleanup",
+            error=str(e),
+            exc_info=True
+        )
+
+    # Close database connections
+    await close_db()
+    logger.info("Database connections closed")
+
+    logger.info("Application shutdown complete")
     # Note: FastAPI/Uvicorn handles connection draining automatically
-    # Additional cleanup logic can be added here (database connections, etc.)
 
 
 # Initialize FastAPI application

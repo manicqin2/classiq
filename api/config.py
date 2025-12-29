@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # CORS configuration
     cors_origins: str = "*"
 
+    # Database configuration
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/quantum_circuits"
+
+    # RabbitMQ configuration
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+
     class Config:
         """Pydantic configuration."""
 
