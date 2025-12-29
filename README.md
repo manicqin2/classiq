@@ -5,6 +5,10 @@ Production-ready REST API server for quantum circuit task management, built with
 ## Features
 
 - ✅ **3 RESTful Endpoints**: Task submission, status query, and health check
+- ✅ **Real Quantum Circuit Execution**: Qiskit 1.4+ with AerSimulator backend
+- ✅ **PostgreSQL Persistence**: Task state and status history tracking
+- ✅ **RabbitMQ Message Queue**: Reliable task distribution to workers
+- ✅ **Multi-Worker Architecture**: 3 workers with round-robin load balancing
 - ✅ **Docker & Docker Compose Support**: Easy deployment and orchestration
 - ✅ **Structured Logging**: JSON logs with correlation IDs for request tracing
 - ✅ **Automatic OpenAPI Documentation**: Interactive API docs at `/docs`
@@ -93,7 +97,10 @@ curl http://localhost:8001/health
 ```bash
 curl -X POST http://localhost:8001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"circuit": "OPENQASM 3; qubit q; h q; measure q;"}'
+  -d '{
+    "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nh q;\nc = measure q;",
+    "shots": 1024
+  }'
 ```
 
 **Response:**
@@ -101,21 +108,65 @@ curl -X POST http://localhost:8001/tasks \
 {
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "message": "Task submitted successfully.",
+  "submitted_at": "2025-12-29T12:00:00Z",
   "correlation_id": "abc123-def456-ghi789"
 }
 ```
+
+**Note**: The `shots` parameter is optional (default: 1024, range: 1-100,000)
 
 ### 3. Query Task Status
 ```bash
 curl http://localhost:8001/tasks/550e8400-e29b-41d4-a716-446655440000
 ```
 
-**Response:**
+**Response (Pending):**
 ```json
 {
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "pending",
+  "submitted_at": "2025-12-29T12:00:00Z",
   "message": "Task is still in progress.",
   "result": null,
+  "status_history": [
+    {
+      "status": "pending",
+      "transitioned_at": "2025-12-29T12:00:00Z",
+      "notes": "Task created"
+    }
+  ],
+  "correlation_id": "xyz789-uvw456-rst123"
+}
+```
+
+**Response (Completed):**
+```json
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "submitted_at": "2025-12-29T12:00:00Z",
+  "message": "Task completed successfully.",
+  "result": {
+    "0": 502,
+    "1": 522
+  },
+  "status_history": [
+    {
+      "status": "pending",
+      "transitioned_at": "2025-12-29T12:00:00Z",
+      "notes": "Task created"
+    },
+    {
+      "status": "processing",
+      "transitioned_at": "2025-12-29T12:00:01Z",
+      "notes": "Worker started processing"
+    },
+    {
+      "status": "completed",
+      "transitioned_at": "2025-12-29T12:00:03Z",
+      "notes": "Task completed successfully"
+    }
+  ],
   "correlation_id": "xyz789-uvw456-rst123"
 }
 ```
@@ -247,6 +298,9 @@ curl http://localhost:8001/tasks/invalid-uuid
 - **Server**: Uvicorn 0.24.0 (ASGI server)
 - **Validation**: Pydantic 2.5.0 (type validation)
 - **Logging**: structlog 23.2.0 (structured logging)
+- **Database**: PostgreSQL 15 + SQLAlchemy 2.0 + Alembic
+- **Message Queue**: RabbitMQ 3.12 + aio-pika 9.0
+- **Quantum Simulator**: Qiskit 1.4+ + Qiskit Aer 0.17+
 - **Container**: Docker with multi-stage builds
 - **Base Image**: python:3.11-slim-bookworm
 
@@ -263,24 +317,45 @@ curl http://localhost:8001/tasks/invalid-uuid
 
 ## Current Implementation Status
 
-This is a **stubbed implementation** designed for parallel development:
+This is a **production-ready implementation** with full quantum circuit execution:
 
 - ✅ All 3 endpoints implemented and functional
 - ✅ Request validation and error handling working
 - ✅ Structured logging with correlation IDs
 - ✅ Docker and Docker Compose ready
-- ⚠️ Task IDs generated but not persisted (no database)
-- ⚠️ Status always returns "pending" (no state tracking)
-- ⚠️ No actual quantum circuit execution (no Qiskit integration)
+- ✅ PostgreSQL database for task persistence and status history
+- ✅ RabbitMQ message queue for reliable task distribution
+- ✅ 3 worker containers executing Qiskit circuits concurrently
+- ✅ Real quantum circuit simulation with configurable shots (1-100,000)
+- ✅ OpenQASM 3 support with stdgates.inc
+- ✅ Comprehensive error handling (parse, execution, and unexpected errors)
+- ✅ Status transitions: PENDING → PROCESSING → COMPLETED/FAILED
 
-### Future Enhancements (Out of Scope)
+### Quantum Circuit Execution
 
-- Database persistence (PostgreSQL)
-- Message queue integration (RabbitMQ)
-- Worker implementation for task execution
+The system uses Qiskit 1.4.5 with the following capabilities:
+
+- **OpenQASM 3 Support**: Full QASM 3.0 syntax with `include "stdgates.inc"`
+- **Configurable Shots**: Submit custom shot counts (1-100,000) via `shots` parameter
+- **Automatic Simulation**: AerSimulator automatically selects optimal method
+- **Circuit Example**:
+  ```python
+  # Hadamard gate creating superposition
+  OPENQASM 3.0;
+  include "stdgates.inc";
+  qubit q;
+  bit c;
+  h q;
+  c = measure q;
+  ```
+
+### Future Enhancements (V2)
+
 - Authentication/authorization
 - Rate limiting
 - Metrics collection (Prometheus)
+- Multi-node RabbitMQ clustering
+- Database read replicas
 
 ## Troubleshooting
 
