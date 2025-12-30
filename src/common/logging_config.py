@@ -9,7 +9,7 @@ import sys
 
 import structlog
 
-from config import settings
+from src.common.config import settings
 
 
 def configure_logging():

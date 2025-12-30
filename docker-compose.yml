@@ -78,7 +78,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: quantum-worker-1
-    command: python worker.py
+    command: python -m src.worker.worker
     environment:
       - LOG_LEVEL=INFO
       - ENVIRONMENT=development
@@ -108,7 +108,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: quantum-worker-2
-    command: python worker.py
+    command: python -m src.worker.worker
     environment:
       - LOG_LEVEL=INFO
       - ENVIRONMENT=development
@@ -138,7 +138,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: quantum-worker-3
-    command: python worker.py
+    command: python -m src.worker.worker
     environment:
       - LOG_LEVEL=INFO
       - ENVIRONMENT=development

@@ -26,7 +26,7 @@ if config.config_file_name is not None:
 # Import the Base metadata from your models
 # Note: Update this import path when you create your database models
 try:
-    from api.src.db.models import Base
+    from src.core.db.models import Base
     target_metadata = Base.metadata
 except ImportError:
     # If models don't exist yet, use None for metadata

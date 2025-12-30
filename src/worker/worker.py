@@ -16,14 +16,14 @@ import structlog
 from qiskit.qasm3 import QASM3ImporterError
 from qiskit_aer.aererror import AerError
 
-from db.models import TaskStatus
-from db.repository import TaskRepository
-from db.session import AsyncSessionLocal, close_db
-from execution.qiskit_executor import QiskitExecutor
-from execution.qiskit_validator import validate_qiskit
-from execution.result_formatter import ResultFormatter
+from src.core.db.models import TaskStatus
+from src.core.db.repository import TaskRepository
+from src.core.db.session import AsyncSessionLocal, close_db
+from src.core.execution.qiskit_executor import QiskitExecutor
+from src.core.execution.qiskit_validator import validate_qiskit
+from src.core.execution.result_formatter import ResultFormatter
 from messaging import cleanup_rabbitmq
-from messaging.consumer import QueueConsumer
+from src.core.messaging.consumer import QueueConsumer
 
 logger = structlog.get_logger()
 

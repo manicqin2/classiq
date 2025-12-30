@@ -15,7 +15,7 @@ import aio_pika
 from aio_pika import Channel, Connection
 from aio_pika.abc import AbstractRobustConnection
 
-from config import settings
+from src.common.config import settings
 
 logger = logging.getLogger(__name__)
 

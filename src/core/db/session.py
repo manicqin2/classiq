@@ -14,7 +14,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from config import settings
+from src.common.config import settings
 
 # Get logger for database operations
 logger = structlog.get_logger(__name__)

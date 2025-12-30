@@ -15,8 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from middleware import get_correlation_id
-from models import (
+from src.api.middleware import get_correlation_id
+from src.api.models import (
     HealthCheckResponse,
     HealthStatus,
     StatusHistoryEntry,
@@ -25,11 +25,11 @@ from models import (
     TaskSubmitRequest,
     TaskSubmitResponse,
 )
-from db.repository import TaskRepository
-from db.session import get_db
+from src.core.db.repository import TaskRepository
+from src.core.db.session import get_db
 from messaging import check_rabbitmq_health
-from services.task_service import TaskService
-from utils import validate_uuid
+from src.core.services.task_service import TaskService
+from src.common.utils import validate_uuid
 
 logger = structlog.get_logger(__name__)
 
