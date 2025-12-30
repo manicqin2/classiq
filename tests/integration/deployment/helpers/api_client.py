@@ -10,11 +10,12 @@ class APIClient:
         self.base_url = base_url
         self.client = httpx.AsyncClient(base_url=base_url, timeout=timeout)
 
-    async def submit_task(self, circuit: str) -> dict[str, object]:
+    async def submit_task(self, circuit: str, shots: int | None = None) -> dict[str, object]:
         """Submit quantum circuit task.
 
         Args:
             circuit: OpenQASM 3 circuit string
+            shots: Number of executions (optional, default: 1024)
 
         Returns:
             Dict with task_id, message, submitted_at, correlation_id
@@ -22,7 +23,10 @@ class APIClient:
         Raises:
             httpx.HTTPStatusError: If API returns error status
         """
-        response = await self.client.post("/tasks", json={"qc": circuit})
+        payload = {"qc": circuit}
+        if shots is not None:
+            payload["shots"] = shots
+        response = await self.client.post("/tasks", json=payload)
         response.raise_for_status()
         return response.json()
 

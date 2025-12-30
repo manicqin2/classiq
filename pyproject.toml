@@ -38,5 +38,6 @@ python_functions = ["test_*"]
 markers = [
     "p1: Priority 1 (critical) tests",
     "p2: Priority 2 (quality) tests",
+    "p3: Priority 3 (status history) tests",
 ]
 asyncio_mode = "auto"
