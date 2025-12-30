@@ -27,7 +27,7 @@ from src.api.models import (
 )
 from src.core.db.repository import TaskRepository
 from src.core.db.session import get_db
-from messaging import check_rabbitmq_health
+from src.core.messaging import check_rabbitmq_health
 from src.core.services.task_service import TaskService
 from src.common.utils import validate_uuid
 

@@ -22,7 +22,7 @@ from src.core.db.session import AsyncSessionLocal, close_db
 from src.core.execution.qiskit_executor import QiskitExecutor
 from src.core.execution.qiskit_validator import validate_qiskit
 from src.core.execution.result_formatter import ResultFormatter
-from messaging import cleanup_rabbitmq
+from src.core.messaging import cleanup_rabbitmq
 from src.core.messaging.consumer import QueueConsumer
 
 logger = structlog.get_logger()

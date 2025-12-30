@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import aio_pika
 import structlog
 
-from messaging import get_rabbitmq_channel
+from src.core.messaging import get_rabbitmq_channel
 
 logger = structlog.get_logger(__name__)
 
