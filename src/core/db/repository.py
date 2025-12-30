@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import StatusHistory, Task, TaskStatus
+from src.core.db.models import StatusHistory, Task, TaskStatus
 
 
 class TaskRepository:

@@ -1,11 +1,14 @@
-# Multi-stage build for Quantum Circuit API Server
+# Multi-stage build for Quantum Circuit API & Worker
 FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
-# Install build dependencies
-COPY api/requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Install uv for faster package installation
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install dependencies using uv (10-100x faster than pip)
+COPY requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Runtime stage
 FROM python:3.11-slim-bookworm
@@ -16,13 +19,13 @@ RUN useradd -m -u 1000 -s /bin/bash appuser
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code from api directory
-COPY --chown=appuser:appuser api/ .
-
-# Set PATH for user-installed packages
-ENV PATH=/home/appuser/.local/bin:$PATH
+# Copy application code
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser migrations/ ./migrations/
+COPY --chown=appuser:appuser alembic.ini ./
 
 # Switch to non-root user
 USER appuser
@@ -34,5 +37,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-# Start server
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command (can be overridden in docker-compose.yml)
+CMD ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

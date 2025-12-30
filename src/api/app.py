@@ -11,11 +11,11 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import logging_config  # Initialize logging
-from config import settings
-from middleware import CorrelationIDMiddleware
-from db.session import close_db, init_db
-from messaging import cleanup_rabbitmq, get_rabbitmq_connection
+import src.common.logging_config  # Initialize logging
+from src.common.config import settings
+from src.api.middleware import CorrelationIDMiddleware
+from src.core.db.session import close_db, init_db
+from src.core.messaging import cleanup_rabbitmq, get_rabbitmq_connection
 
 logger = structlog.get_logger(__name__)
 
@@ -99,7 +99,7 @@ from pydantic import ValidationError
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors with consistent error response format."""
-    from middleware import get_correlation_id
+    from src.api.middleware import get_correlation_id
 
     errors = {}
     for error in exc.errors():
@@ -126,7 +126,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """Handle unexpected errors with generic error message."""
-    from middleware import get_correlation_id
+    from src.api.middleware import get_correlation_id
 
     logger.error(
         "Unhandled exception",
@@ -145,6 +145,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 
 # Register routes
-from routes import router as api_router
+from src.api.routes import router as api_router
 
 app.include_router(api_router)
