@@ -16,11 +16,79 @@ graph LR
     W1 & W2 & W3 -->|Execute| QK[Qiskit Aer]
 ```
 
+## Development Process
+The project was developed using claude-code and [speckit](https://github.com/github/spec-kit)
+(The specs for each feature can be found under /specs/)
+
+The project stack is Python 3.11, FastAPI, RabbitMQ, PostgreSQL, and Qiskit Aer.
+and it has 4 components: DB, Queue, API, Workers.
+
+In a real production scenario, you wouldn't deploy the DB as part of the container, and depending on your system, the queues would probably be managed by the cloud provider. But for this example, the docker-compose setup includes the API, 3 workers, DB, and queue as separate containers.
+
+Because no load was requested in the instructions, I decided to go with:
+**60 tasks/sec** (assumption based on reasonable quantum developer usage patterns).
+
+* I think it's reasonable because there aren't many quantum developers 
+* and the process of developing takes time. 
+* We are also using a critical resource which has a low capacity (quantum computer).
+
+We can easily scale horizontally by adding more workers, but we'd prefer k8s or lambdas at that point.
+
+### Stack Decisions
+
+#### DB
+I decided to go with Postgres, for a couple of reasons:
+* The scale is not high.
+* I prioritize consistency over speed.
+* I predict that the system is part of a larger system that needs to also keep member data, member preferences, track logins, etc which are easier to handle in a SQL DB.
+* We are using Postgres strong consistency to make sure workers don't process the same message twice.
+
+There are currently 2 tables: task and status_history.
+* task manages the requests and their status.
+* status_history keeps a log on the changes between the statuses, this table is more for insights.
+
+#### Queue
+This is the first time I'm using RabbitMQ. I've been working with SQS so I have strong familiarity with queues.
+
+The queue is FIFO, persistent, at-least-once, and can store over ~4 million messages.
+
+It currently stores unprocessed messages forever which can be an issue in high scale systems, but for the current exercise I think it's reasonable.
+
+I decided not to use DLQ, all message's data and payload are stored in the DB and I decided that adding the DLQ will be redundant. Though in production I'd probably add one.
+
+
+#### API
+This is the app that manages client requests
+
+**Task submission:**
+* Validates structure
+* Generates a correlation ID
+* Inserts them to DB
+* Pushes them to queue
+* Returns task_id
+
+**Task status:**
+* Validates structure
+* Fetches task data from DB
+* Returns task data
+
+**Health check:**
+* Checks DB health
+* Checks queue health
+
+There is currently no health check for workers, since workers are stateless and pull from a shared queue, if individual workers fail, the remaining workers keep processing tasks.
+
+#### Workers
+These are the worker bees that push the job to the quantum computers using Qiskit.
+Currently we only use the AER simulator.
+
+Since RabbitMQ delivers messages at-least-once, we need to make sure the same task doesn't get picked up by multiple workers. So before processing, workers check the DB to verify the task status hasn't already been updated by another worker.
+
 ### Key Design Decisions
 
-**Message Queue**: RabbitMQ provides reliable task distribution with message persistence, ensuring no task loss during restarts. Workers use `prefetch=1` for fair load balancing.
+**Message Queue**: RabbitMQ provides reliable task distribution with message persistence, ensuring no task loss during restarts.
 
-**Database**: PostgreSQL with async SQLAlchemy for task persistence and status tracking. Atomic status transitions prevent race conditions in multi-worker scenarios.
+**Database**: PostgreSQL with async SQLAlchemy for task persistence and status tracking. Optimistic lock prevent race conditions in multi-worker scenarios.
 
 **Execution Engine**: Qiskit Aer simulator executes circuits with configurable shots (1-100,000). QASM3 format chosen for standardization and compatibility.
 
@@ -283,7 +351,6 @@ docker-compose logs -f | grep "correlation_id=abc-123"
 
 Interactive OpenAPI documentation:
 - **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
 - **OpenAPI Schema**: http://localhost:8001/openapi.json
 
 ## Stopping the System
@@ -295,23 +362,6 @@ docker-compose down
 # Stop and remove volumes (clear all data)
 docker-compose down -v
 ```
-
-## Production Considerations
-
-**Security:**
-- Change default credentials in docker-compose.yml
-- Use secrets management for production deployments
-- Enable TLS for RabbitMQ and PostgreSQL connections
-
-**Scaling:**
-- Add workers by duplicating service definitions
-- Use external PostgreSQL/RabbitMQ for multi-host deployments
-- Consider read replicas for high query loads
-
-**Monitoring:**
-- Export structured logs to ELK/Datadog/CloudWatch
-- Add Prometheus metrics for worker throughput
-- Set up alerts for queue depth and error rates
 
 ---
 

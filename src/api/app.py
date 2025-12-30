@@ -74,6 +74,7 @@ app = FastAPI(
     "This is a stubbed implementation providing foundational endpoints for parallel development.",
     version="1.0.0",
     lifespan=lifespan,
+    redoc_url=None,  # Disable ReDoc (CDN issues)
 )
 
 # Configure CORS
