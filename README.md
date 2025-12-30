@@ -1,86 +1,144 @@
-# Quantum Circuit Task Queue API
+# Quantum Circuit Task Queue
 
-Production-ready REST API server for quantum circuit task management, built with FastAPI and Docker.
+Asynchronous quantum circuit execution system with REST API, persistent task queue, and horizontal worker scaling.
 
-## Features
+## Architecture
 
-- ✅ **3 RESTful Endpoints**: Task submission, status query, and health check
-- ✅ **Real Quantum Circuit Execution**: Qiskit 1.4+ with AerSimulator backend
-- ✅ **PostgreSQL Persistence**: Task state and status history tracking
-- ✅ **RabbitMQ Message Queue**: Reliable task distribution to workers
-- ✅ **Multi-Worker Architecture**: 3 workers with round-robin load balancing
-- ✅ **Docker & Docker Compose Support**: Easy deployment and orchestration
-- ✅ **Structured Logging**: JSON logs with correlation IDs for request tracing
-- ✅ **Automatic OpenAPI Documentation**: Interactive API docs at `/docs`
-- ✅ **Input Validation**: Pydantic v2 request/response validation
-- ✅ **Health Checks**: Built-in container health monitoring
-- ✅ **Production-Ready**: Non-root user, multi-stage builds, graceful shutdown
+```mermaid
+graph LR
+    Client([Client]) -->|HTTP| API[FastAPI Server]
+    API -->|Persist| DB[(PostgreSQL)]
+    API -->|Publish| Queue[RabbitMQ]
+    Queue -->|Consume| W1[Worker 1]
+    Queue -->|Consume| W2[Worker 2]
+    Queue -->|Consume| W3[Worker 3]
+    W1 & W2 & W3 -->|Update Status| DB
+    W1 & W2 & W3 -->|Execute| QK[Qiskit Aer]
+```
+
+### Key Design Decisions
+
+**Message Queue**: RabbitMQ provides reliable task distribution with message persistence, ensuring no task loss during restarts. Workers use `prefetch=1` for fair load balancing.
+
+**Database**: PostgreSQL with async SQLAlchemy for task persistence and status tracking. Atomic status transitions prevent race conditions in multi-worker scenarios.
+
+**Execution Engine**: Qiskit Aer simulator executes circuits with configurable shots (1-100,000). QASM3 format chosen for standardization and compatibility.
+
+**Horizontal Scaling**: Multiple worker instances consume from shared queue. Add workers by duplicating service definitions in docker-compose.yml.
+
+**Observability**: Structured JSON logging with correlation IDs enables request tracing across API and worker services.
+
+## Project Structure
+
+```
+classiq/
+├── src/
+│   ├── api/           # FastAPI server
+│   ├── worker/        # Background task processor
+│   ├── core/          # Shared business logic
+│   │   ├── db/        # Database models & repository
+│   │   ├── messaging/ # RabbitMQ pub/sub
+│   │   ├── execution/ # Qiskit circuit execution
+│   │   └── services/  # Business logic layer
+│   └── common/        # Config, logging, utilities
+├── tests/             # Integration tests (26 tests)
+└── migrations/        # Alembic database migrations
+```
 
 ## Quick Start
 
-### Option 1: Docker Compose (Recommended)
+### Prerequisites
+
+- Docker & Docker Compose
+- Ports 5432, 5672, 8001 available
+
+### Start the System
 
 ```bash
-# 1. Clone and navigate to the project
-cd /path/to/classiq
-
-# 2. (Optional) Create .env file from template
-cp .env.example .env
-
-# 3. Start the service
+# Start all services
 docker-compose up -d
 
-# 4. Verify it's running
+# Verify health
 curl http://localhost:8001/health
 
-# 5. View logs
-docker-compose logs -f api
-
-# 6. Stop the service
-docker-compose down
-```
-
-### Option 2: Docker Only
-
-```bash
-# Build the image
-docker build -t quantum-api:latest .
-
-# Run the container
-docker run -d --name quantum-api -p 8000:8000 quantum-api:latest
-
-# Verify it's running
-curl http://localhost:8000/health
-
 # View logs
-docker logs -f quantum-api
-
-# Stop and remove
-docker stop quantum-api && docker rm quantum-api
+docker-compose logs -f api worker-1
 ```
 
-### Option 3: Local Development
+Services start in dependency order:
+1. PostgreSQL (port 5432)
+2. RabbitMQ (port 5672, management UI on 15672)
+3. API server (port 8001)
+4. Workers (3 instances)
+
+## API Usage
+
+### Submit Task
 
 ```bash
-# Navigate to api directory
-cd api
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the server
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-
-# Access at http://localhost:8000
+curl -X POST http://localhost:8001/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "qc": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nx q;\nc = measure q;",
+    "shots": 100
+  }'
 ```
 
-## API Endpoints
+**Response:**
+```json
+{
+  "task_id": "123e4567-e89b-12d3-a456-426614174000",
+  "message": "Task submitted successfully.",
+  "submitted_at": "2025-12-30T10:30:45.123456Z",
+  "correlation_id": "abc-123-def"
+}
+```
 
-### 1. Health Check
+**Parameters:**
+- `qc`: OpenQASM 3.0 circuit definition (required)
+- `shots`: Number of executions (optional, default: 1024, range: 1-100,000)
+
+### Get Task Status
+
+```bash
+curl http://localhost:8001/tasks/123e4567-e89b-12d3-a456-426614174000
+```
+
+**Response (Completed):**
+```json
+{
+  "task_id": "123e4567-e89b-12d3-a456-426614174000",
+  "status": "completed",
+  "submitted_at": "2025-12-30T10:30:45.123456Z",
+  "message": "Task completed successfully.",
+  "result": {
+    "counts": {"0": 0, "1": 100},
+    "shots": 100,
+    "success": true
+  },
+  "status_history": [
+    {
+      "status": "pending",
+      "transitioned_at": "2025-12-30T10:30:45.123456Z",
+      "notes": "Task created and queued"
+    },
+    {
+      "status": "processing",
+      "transitioned_at": "2025-12-30T10:30:46.234567Z",
+      "notes": "Worker started processing"
+    },
+    {
+      "status": "completed",
+      "transitioned_at": "2025-12-30T10:30:47.345678Z",
+      "notes": "Task completed successfully"
+    }
+  ],
+  "correlation_id": "abc-123-def"
+}
+```
+
+### Health Check
+
 ```bash
 curl http://localhost:8001/health
 ```
@@ -89,403 +147,173 @@ curl http://localhost:8001/health
 ```json
 {
   "status": "healthy",
-  "timestamp": "2025-12-28T12:00:00.000000+00:00"
+  "timestamp": "2025-12-30T10:30:00.000000Z",
+  "database_status": "connected",
+  "queue_status": "connected"
 }
 ```
 
-### 2. Submit Task
+## Task Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Task Submitted
+    pending --> processing: Worker Picks Up
+    processing --> completed: Success
+    processing --> failed: Error
+    completed --> [*]
+    failed --> [*]
+```
+
+**States:**
+- **pending**: Task persisted to DB, message published to queue
+- **processing**: Worker consumed message, executing circuit
+- **completed**: Circuit executed successfully, results stored
+- **failed**: Circuit parsing or execution error
+
+Workers implement idempotency checks - duplicate messages are safely ignored based on current task status.
+
+## Example Workflows
+
+### Bell State Circuit
+
+Create entangled qubit pair and measure:
+
 ```bash
 curl -X POST http://localhost:8001/tasks \
   -H "Content-Type: application/json" \
   -d '{
-    "circuit": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nh q;\nc = measure q;",
+    "qc": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit[2] q;\nbit[2] c;\nh q[0];\ncx q[0], q[1];\nc[0] = measure q[0];\nc[1] = measure q[1];",
     "shots": 1024
+  }'
+
+# Save task_id from response
+TASK_ID="<task_id_from_response>"
+
+# Poll for completion (typically <1 second)
+curl http://localhost:8001/tasks/$TASK_ID
+```
+
+**Expected result**: ~50% `00`, ~50% `11` (entangled state collapses to correlated measurements).
+
+### Single Qubit X-Gate
+
+Flip qubit from |0⟩ to |1⟩:
+
+```bash
+curl -X POST http://localhost:8001/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "qc": "OPENQASM 3.0;\ninclude \"stdgates.inc\";\nqubit q;\nbit c;\nx q;\nc = measure q;",
+    "shots": 100
   }'
 ```
 
-**Response:**
-```json
-{
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "Task submitted successfully.",
-  "submitted_at": "2025-12-29T12:00:00Z",
-  "correlation_id": "abc123-def456-ghi789"
-}
-```
-
-**Note**: The `shots` parameter is optional (default: 1024, range: 1-100,000)
-
-### 3. Query Task Status
-```bash
-curl http://localhost:8001/tasks/550e8400-e29b-41d4-a716-446655440000
-```
-
-**Response (Pending):**
-```json
-{
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "pending",
-  "submitted_at": "2025-12-29T12:00:00Z",
-  "message": "Task is still in progress.",
-  "result": null,
-  "status_history": [
-    {
-      "status": "pending",
-      "transitioned_at": "2025-12-29T12:00:00Z",
-      "notes": "Task created"
-    }
-  ],
-  "correlation_id": "xyz789-uvw456-rst123"
-}
-```
-
-**Response (Completed):**
-```json
-{
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "completed",
-  "submitted_at": "2025-12-29T12:00:00Z",
-  "message": "Task completed successfully.",
-  "result": {
-    "0": 502,
-    "1": 522
-  },
-  "status_history": [
-    {
-      "status": "pending",
-      "transitioned_at": "2025-12-29T12:00:00Z",
-      "notes": "Task created"
-    },
-    {
-      "status": "processing",
-      "transitioned_at": "2025-12-29T12:00:01Z",
-      "notes": "Worker started processing"
-    },
-    {
-      "status": "completed",
-      "transitioned_at": "2025-12-29T12:00:03Z",
-      "notes": "Task completed successfully"
-    }
-  ],
-  "correlation_id": "xyz789-uvw456-rst123"
-}
-```
-
-## Documentation
-
-Once the server is running, access interactive API documentation:
-
-- **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
-- **OpenAPI JSON**: http://localhost:8001/openapi.json
-
-## Docker Compose Commands
-
-```bash
-# Start services in detached mode
-docker-compose up -d
-
-# Start with rebuild
-docker-compose up -d --build
-
-# View logs
-docker-compose logs -f
-
-# View logs for specific service
-docker-compose logs -f api
-
-# Stop services
-docker-compose stop
-
-# Stop and remove containers
-docker-compose down
-
-# Stop and remove containers, volumes, and images
-docker-compose down -v --rmi all
-
-# Restart service
-docker-compose restart api
-
-# Check service status
-docker-compose ps
-
-# Execute command in running container
-docker-compose exec api bash
-```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root (copy from `.env.example`):
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | 8000 | HTTP server port |
-| `LOG_LEVEL` | INFO | Logging level (DEBUG, INFO, WARN, ERROR) |
-| `ENVIRONMENT` | development | Environment name |
-| `CORS_ORIGINS` | * | Allowed CORS origins (comma-separated) |
-
-### Docker Compose Configuration
-
-Edit `docker-compose.yml` to customize:
-
-- **Ports**: Change `"8000:8000"` to use different host port
-- **Environment**: Add/modify environment variables
-- **Restart Policy**: Change `restart: unless-stopped`
-- **Networks**: Add additional services to `quantum-network`
+**Expected result**: 100% `1` (deterministic flip).
 
 ## Testing
 
-### Integration Tests
+```bash
+# Run full integration test suite
+docker-compose exec api pytest tests/integration/deployment -v
+
+# Expected output: 26 passed
+```
+
+**Test coverage:**
+- E2E workflow (submit → process → retrieve)
+- Health checks (database + queue connectivity)
+- Error handling (invalid circuits, malformed UUIDs)
+- Queue persistence and message acknowledgment
+- Schema validation and API contracts
+
+## Technology Stack
+
+| Component | Technology | Rationale |
+|-----------|-----------|-----------|
+| API Server | FastAPI 0.104 | Async framework with automatic OpenAPI docs |
+| Database | PostgreSQL 15 + asyncpg | ACID guarantees, async support |
+| ORM | SQLAlchemy 2.0 | Async ORM with type hints |
+| Queue | RabbitMQ 3.12 + aio-pika | Message persistence, fair distribution |
+| Execution | Qiskit 1.0 + Qiskit Aer | Production quantum simulator |
+| Logging | structlog | JSON structured logs for parsing |
+| Migrations | Alembic | Version-controlled schema changes |
+| Container | Docker + uv | Multi-stage builds, fast installs |
+
+## Monitoring
+
+### RabbitMQ Management UI
 
 ```bash
-# Run all integration tests
-API_BASE=http://localhost:8001 bash api/tests/integration/test-api.sh
-
-# Or with custom API base URL
-API_BASE=http://localhost:8001 bash api/tests/integration/test-api.sh
+open http://localhost:15672
+# Credentials: quantum_user / quantum_pass
 ```
 
-### Manual Testing
+View queue depth, message rates, consumer activity, and connection health.
+
+### Container Status
 
 ```bash
-# Test health endpoint
-curl http://localhost:8001/health
-
-# Test task submission
-curl -X POST http://localhost:8001/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"circuit": "OPENQASM 3; qubit[2] q; h q[0]; cx q[0], q[1];"}'
-
-# Test validation error
-curl -X POST http://localhost:8001/tasks \
-  -H "Content-Type: application/json" \
-  -d '{}'
-
-# Test invalid UUID
-curl http://localhost:8001/tasks/invalid-uuid
-```
-
-## Project Structure
-
-```
-.
-├── Dockerfile                      # Multi-stage container build
-├── docker-compose.yml             # Docker Compose orchestration
-├── .env.example                   # Environment variables template
-├── .dockerignore                  # Docker build exclusions
-├── README.md                      # This file
-└── api/                           # API application code
-    ├── app.py                     # FastAPI application
-    ├── config.py                  # Configuration management
-    ├── models.py                  # Pydantic models
-    ├── routes.py                  # API endpoints
-    ├── middleware.py              # Correlation ID middleware
-    ├── logging_config.py          # Structured logging setup
-    ├── utils.py                   # Utility functions
-    ├── requirements.txt           # Python dependencies
-    └── tests/
-        └── integration/
-            └── test-api.sh        # Integration test suite
-```
-
-## Architecture
-
-### Technology Stack
-
-- **Framework**: FastAPI 0.104.1 (async web framework)
-- **Server**: Uvicorn 0.24.0 (ASGI server)
-- **Validation**: Pydantic 2.5.0 (type validation)
-- **Logging**: structlog 23.2.0 (structured logging)
-- **Database**: PostgreSQL 15 + SQLAlchemy 2.0 + Alembic
-- **Message Queue**: RabbitMQ 3.12 + aio-pika 9.0
-- **Quantum Simulator**: Qiskit 1.4+ + Qiskit Aer 0.17+
-- **Container**: Docker with multi-stage builds
-- **Base Image**: python:3.11-slim-bookworm
-
-### Key Features
-
-1. **Correlation IDs**: Every request gets a unique ID for distributed tracing
-2. **Structured Logging**: JSON logs with contextual information
-3. **Request Validation**: Automatic validation using Pydantic models
-4. **Error Handling**: Global exception handlers with clear error messages
-5. **Health Checks**: Docker health checks and dedicated health endpoint
-6. **CORS Support**: Configurable CORS middleware
-7. **Non-root User**: Container runs as `appuser` (UID 1000)
-8. **Graceful Shutdown**: Proper cleanup on SIGTERM
-
-## Current Implementation Status
-
-This is a **production-ready implementation** with full quantum circuit execution:
-
-- ✅ All 3 endpoints implemented and functional
-- ✅ Request validation and error handling working
-- ✅ Structured logging with correlation IDs
-- ✅ Docker and Docker Compose ready
-- ✅ PostgreSQL database for task persistence and status history
-- ✅ RabbitMQ message queue for reliable task distribution
-- ✅ 3 worker containers executing Qiskit circuits concurrently
-- ✅ Real quantum circuit simulation with configurable shots (1-100,000)
-- ✅ OpenQASM 3 support with stdgates.inc
-- ✅ Comprehensive error handling (parse, execution, and unexpected errors)
-- ✅ Status transitions: PENDING → PROCESSING → COMPLETED/FAILED
-
-### Quantum Circuit Execution
-
-The system uses Qiskit 1.4.5 with the following capabilities:
-
-- **OpenQASM 3 Support**: Full QASM 3.0 syntax with `include "stdgates.inc"`
-- **Configurable Shots**: Submit custom shot counts (1-100,000) via `shots` parameter
-- **Automatic Simulation**: AerSimulator automatically selects optimal method
-- **Circuit Example**:
-  ```python
-  # Hadamard gate creating superposition
-  OPENQASM 3.0;
-  include "stdgates.inc";
-  qubit q;
-  bit c;
-  h q;
-  c = measure q;
-  ```
-
-### Future Enhancements (V2)
-
-- Authentication/authorization
-- Rate limiting
-- Metrics collection (Prometheus)
-- Multi-node RabbitMQ clustering
-- Database read replicas
-
-## Troubleshooting
-
-### Port Already in Use
-
-```bash
-# Check what's using the port
-lsof -i :8000
-
-# Stop the conflicting process or use different port
-docker-compose down
-# Edit docker-compose.yml to change port mapping
-```
-
-### Container Won't Start
-
-```bash
-# Check logs
-docker-compose logs api
-
-# Rebuild from scratch
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
-```
-
-### Health Check Failing
-
-```bash
-# Check container status
+# Check all services
 docker-compose ps
 
-# View detailed logs
-docker-compose logs api
-
-# Execute health check manually
-docker-compose exec api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+# Expected output (all healthy):
+# quantum-api        Up (healthy)   0.0.0.0:8001->8000/tcp
+# quantum-worker-1   Up (healthy)   8000/tcp
+# quantum-worker-2   Up (healthy)   8000/tcp
+# quantum-worker-3   Up (healthy)   8000/tcp
+# quantum-postgres   Up (healthy)   0.0.0.0:5432->5432/tcp
+# quantum-rabbitmq   Up (healthy)   0.0.0.0:5672->5672/tcp
 ```
 
-### Permission Issues
+### Logs
 
 ```bash
-# Container runs as non-root user (appuser)
-# If you need to access files, ensure they're readable by UID 1000
-ls -la api/
+# All services
+docker-compose logs -f
 
-# Fix permissions if needed
-chmod -R 755 api/
+# Specific service
+docker-compose logs -f worker-1
+
+# Follow with correlation ID filter
+docker-compose logs -f | grep "correlation_id=abc-123"
 ```
 
-## Development Workflow
+## API Documentation
 
-### Making Code Changes
+Interactive OpenAPI documentation:
+- **Swagger UI**: http://localhost:8001/docs
+- **ReDoc**: http://localhost:8001/redoc
+- **OpenAPI Schema**: http://localhost:8001/openapi.json
+
+## Stopping the System
 
 ```bash
-# 1. Make your changes to files in api/
+# Stop services (preserve data)
+docker-compose down
 
-# 2. Rebuild and restart
-docker-compose up -d --build
-
-# 3. View logs to verify
-docker-compose logs -f api
-
-# 4. Test your changes
-curl http://localhost:8000/health
+# Stop and remove volumes (clear all data)
+docker-compose down -v
 ```
 
-### Debugging
+## Production Considerations
 
-```bash
-# Access container shell
-docker-compose exec api bash
+**Security:**
+- Change default credentials in docker-compose.yml
+- Use secrets management for production deployments
+- Enable TLS for RabbitMQ and PostgreSQL connections
 
-# Check Python version
-docker-compose exec api python --version
+**Scaling:**
+- Add workers by duplicating service definitions
+- Use external PostgreSQL/RabbitMQ for multi-host deployments
+- Consider read replicas for high query loads
 
-# List installed packages
-docker-compose exec api pip list
-
-# Test import
-docker-compose exec api python -c "from app import app; print('OK')"
-```
-
-## Production Deployment
-
-For production deployment:
-
-1. **Set Environment**:
-   ```bash
-   echo "ENVIRONMENT=production" >> .env
-   echo "LOG_LEVEL=WARN" >> .env
-   ```
-
-2. **Configure CORS**:
-   ```bash
-   echo "CORS_ORIGINS=https://your-domain.com" >> .env
-   ```
-
-3. **Use Production Compose File**:
-   ```yaml
-   # docker-compose.prod.yml
-   version: '3.8'
-   services:
-     api:
-       build: .
-       restart: always
-       environment:
-         - ENVIRONMENT=production
-         - LOG_LEVEL=WARN
-       # Add nginx reverse proxy, SSL, etc.
-   ```
-
-4. **Deploy**:
-   ```bash
-   docker-compose -f docker-compose.prod.yml up -d
-   ```
-
-## License
-
-This project is part of the Classiq Quantum Circuit Task Queue system.
-
-## Support
-
-For issues and questions:
-- Check logs: `docker-compose logs -f api`
-- Review API docs: http://localhost:8000/docs
-- Inspect container: `docker-compose exec api bash`
+**Monitoring:**
+- Export structured logs to ELK/Datadog/CloudWatch
+- Add Prometheus metrics for worker throughput
+- Set up alerts for queue depth and error rates
 
 ---
 
-**Status**: ✅ Ready for Production Deployment
-
-**Last Updated**: 2025-12-28
+**Status**: Production Ready
+**Last Updated**: 2025-12-30
